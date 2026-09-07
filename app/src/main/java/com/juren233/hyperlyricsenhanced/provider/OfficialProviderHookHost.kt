@@ -25,6 +25,9 @@ import io.github.libxposed.api.XposedModule
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.query.FindMethod
 import org.luckypray.dexkit.query.enums.StringMatchType
+import org.luckypray.dexkit.query.matchers.AnnotationElementMatcher
+import org.luckypray.dexkit.query.matchers.AnnotationMatcher
+import org.luckypray.dexkit.query.matchers.ClassMatcher
 import org.luckypray.dexkit.query.matchers.MethodMatcher
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -308,6 +311,16 @@ internal class OfficialProviderHookHost(
         require(target.parameterTypeNames.all(String::isNotBlank)) {
             "Provider 构造 Hook 参数类型不能为空"
         }
+        require(
+            target.firstParameterTypeName == null || target.firstParameterTypeName.isNotBlank(),
+        ) {
+            "Provider 构造 Hook 首参类型不能为空"
+        }
+        require(
+            target.firstParameterTypeName == null || target.parameterTypeNames.isEmpty(),
+        ) {
+            "Provider 构造 Hook 首参约束与完整参数列表互斥"
+        }
         val constructor = resolveConstructor(target)
         val descriptor = describe(target)
         module.hook(constructor).intercept(
@@ -551,6 +564,13 @@ internal class OfficialProviderHookHost(
                     query.declaringClassNamePrefix?.let { prefix ->
                         declaredClass(prefix, StringMatchType.StartsWith, false)
                     }
+                    if (query.declaringClassFieldTypeNames.isNotEmpty()) {
+                        declaredClass(
+                            ClassMatcher().apply {
+                                query.declaringClassFieldTypeNames.forEach(::addFieldForType)
+                            },
+                        )
+                    }
                     query.requiredStrings.forEach(::addEqString)
                     query.requiredInvokedMethodDescriptors.forEach(::addInvoke)
                     query.requiredInvokedMethodNames.forEach { methodName ->
@@ -558,6 +578,27 @@ internal class OfficialProviderHookHost(
                     }
                     query.requiredCallerMethodNames.forEach { methodName ->
                         addCaller(MethodMatcher().name(methodName))
+                    }
+                    query.requiredMethodAnnotation?.let { constraint ->
+                        addAnnotation(
+                            AnnotationMatcher().apply {
+                                constraint.annotationTypeName?.let { typeName ->
+                                    type(typeName, StringMatchType.Equals, false)
+                                }
+                                addElement(
+                                    AnnotationElementMatcher().apply {
+                                        constraint.elementName?.let { elementName ->
+                                            name(elementName, StringMatchType.Equals, false)
+                                        }
+                                        stringValue(
+                                            constraint.elementValue,
+                                            StringMatchType.Equals,
+                                            false,
+                                        )
+                                    },
+                                )
+                            },
+                        )
                     }
                     query.parameterTypeNames?.let(::paramTypes)
                     query.returnTypeName?.let(::returnType)
@@ -856,6 +897,10 @@ internal class OfficialProviderHookHost(
         query.parameterTypeReferences.forEach { (index, reference) ->
             checkNotNull(materializedParameterTypes)[index] = resolve(reference)
         }
+        val materializedFieldTypes = buildList {
+            addAll(query.declaringClassFieldTypeNames)
+            query.declaringClassFieldReferences.forEach { add(resolve(it)) }
+        }
         return query.copy(
             declaringClassName = query.declaringClassReference?.let(::resolve)
                 ?: query.declaringClassName,
@@ -864,6 +909,8 @@ internal class OfficialProviderHookHost(
             parameterTypeReferences = emptyMap(),
             returnTypeName = query.returnTypeReference?.let(::resolve) ?: query.returnTypeName,
             returnTypeReference = null,
+            declaringClassFieldTypeNames = materializedFieldTypes,
+            declaringClassFieldReferences = emptyList(),
         )
     }
 
@@ -965,10 +1012,23 @@ internal class OfficialProviderHookHost(
         target: OfficialProviderConstructorTarget,
     ): java.lang.reflect.Constructor<*> {
         val targetClass = Class.forName(target.className, false, targetClassLoader)
-        val parameterTypes = target.parameterTypeNames.map(::resolveParameterType).toTypedArray()
-        return targetClass.getDeclaredConstructor(*parameterTypes).apply {
-            isAccessible = true
+        val constructor = if (target.firstParameterTypeName != null) {
+            // 链式解析模式：完整参数列表随版本漂移，按首参（服务接口）唯一匹配。
+            val firstParameterType = resolveParameterType(target.firstParameterTypeName)
+            val candidates = targetClass.declaredConstructors.filter { candidate ->
+                candidate.parameterTypes.isNotEmpty() &&
+                    candidate.parameterTypes.first() == firstParameterType
+            }
+            require(candidates.size == 1) {
+                "Provider 构造函数首参匹配必须唯一: ${target.className} " +
+                    "first=${target.firstParameterTypeName} count=${candidates.size}"
+            }
+            candidates.single()
+        } else {
+            val parameterTypes = target.parameterTypeNames.map(::resolveParameterType).toTypedArray()
+            targetClass.getDeclaredConstructor(*parameterTypes)
         }
+        return constructor.apply { isAccessible = true }
     }
 
     private fun selectDexMethodMatch(
@@ -1134,8 +1194,13 @@ internal class OfficialProviderHookHost(
     private fun describe(target: OfficialProviderConstructorTarget): String = buildString {
         append(target.className)
         append("#<init>(")
-        append(target.parameterTypeNames.joinToString())
-        append(')')
+        if (target.firstParameterTypeName != null) {
+            append(target.firstParameterTypeName)
+            append(",…)")
+        } else {
+            append(target.parameterTypeNames.joinToString())
+            append(')')
+        }
     }
 
     private fun resolveParameterType(typeName: String): Class<*> = when (typeName) {

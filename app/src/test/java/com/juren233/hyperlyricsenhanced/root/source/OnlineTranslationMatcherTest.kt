@@ -13,6 +13,50 @@ import org.junit.Test
 class OnlineTranslationMatcherTest {
 
     @Test
+    fun `fully chinese song ignores online translations but keeps pronunciation`() {
+        val base = Song(
+            lyrics = listOf(RichLyricLine(begin = 1_000, end = 2_000, text = "感谢你曾来过"))
+        )
+
+        val result = OnlineTranslationMatcher.apply(
+            base,
+            listOf(
+                LrcLine(
+                    startTimeMs = 1_000,
+                    content = "感谢你曾来过",
+                    translation = "（在那个房间）",
+                    romanization = "gan xie ni ceng lai guo",
+                )
+            ),
+        )
+
+        val line = result.song.lyrics.orEmpty().single()
+        assertNull(line.translation)
+        assertEquals("gan xie ni ceng lai guo", line.roma)
+        assertEquals(1, result.matchedCount)
+        assertEquals(false, OnlineTranslationMatcher.contributesTranslation(base, result))
+        assertEquals(true, OnlineTranslationMatcher.contributesPronunciation(base, result))
+    }
+
+    @Test
+    fun `mixed language song still receives online translations`() {
+        val base = Song(
+            lyrics = listOf(
+                RichLyricLine(begin = 1_000, end = 2_000, text = "Baby 感谢你曾来过")
+            )
+        )
+
+        val result = OnlineTranslationMatcher.apply(
+            base,
+            listOf(
+                LrcLine(1_000, "Baby 感谢你曾来过", translation = "（在那个房间）"),
+            ),
+        )
+
+        assertEquals("（在那个房间）", result.song.lyrics?.single()?.translation)
+    }
+
+    @Test
     fun `forced source without a candidate remains selected and uses the other source`() {
         val base = Song(
             lyrics = listOf(RichLyricLine(text = "君の名は"))

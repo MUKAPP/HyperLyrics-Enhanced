@@ -2846,6 +2846,42 @@ internal class AppleLyricsSupplementHooks(
             "$index=$resourceId${resourceName?.let { ":$it" }.orEmpty()}"
         }.joinToString(prefix = "[", postfix = "]")
 
+    private val loggedTranslationAvailabilityKeys =
+        java.util.Collections.newSetFromMap(
+            java.util.concurrent.ConcurrentHashMap<String, Boolean>(),
+        )
+
+    /** Debug-only：定位按钮“有翻译”信念的具体来源（Apple 原生或模块哪个 Store）。 */
+    private fun logTranslationAvailabilityOverride(
+        method: String,
+        songId: String?,
+        original: Boolean,
+        nativeStore: Boolean,
+        supplement: Boolean,
+        lunaBeat: Boolean,
+        resolved: Boolean,
+        songNative: Any?,
+    ) {
+        val key = "$method:$songId:$original:$nativeStore:$supplement:$lunaBeat:$resolved"
+        if (!loggedTranslationAvailabilityKeys.add(key)) return
+        if (loggedTranslationAvailabilityKeys.size > 64) loggedTranslationAvailabilityKeys.clear()
+        val officialLanguages = songNative?.let { native ->
+            runCatching {
+                nativeVectorStrings(
+                    lyricsNativeCall(
+                        native,
+                        AppleMusicRuntimeMember.LYRICS_NATIVE_SONG_TRANSLATION_LANGUAGES_METHOD,
+                    )
+                )
+            }.getOrNull()
+        }
+        ProviderLogger.diagnostic(
+            "Apple Music 原生翻译可用性覆盖: method=$method, songId=$songId, " +
+                "original=$original, nativeStore=$nativeStore, supplement=$supplement, " +
+                "lunaBeat=$lunaBeat, officialLanguages=$officialLanguages, resolved=$resolved"
+        )
+    }
+
     private fun ensureAppleNativeOnlineTranslationHooks(songNative: Any) {
         val translationAvailabilityChecks = mapOf<String, (String?) -> Boolean>(
             lyricsRuntimeMember(
@@ -2892,11 +2928,22 @@ internal class AppleLyricsSupplementHooks(
                 if (appleOfficialTranslationProbeGuard.isActive) {
                     return@installResultOverrideHook original
                 }
-                if (original == true) {
-                    true
-                } else {
-                    hasOnlineContent(nativeSongId(chain.thisObject))
+                val songId = nativeSongId(chain.thisObject)
+                val resolved = original == true || hasOnlineContent(songId)
+                if (BuildConfig.DEBUG) {
+                    logTranslationAvailabilityOverride(
+                        method = name,
+                        songId = songId,
+                        original = original == true,
+                        nativeStore = isNativeOnlineTranslationEnabled() &&
+                            nativeOnlineTranslationStore.hasTranslation(songId),
+                        supplement = missingLyricsSupplement().hasTranslation(songId),
+                        lunaBeat = missingLyricsSupplement().hasLunaBeatSource(songId),
+                        resolved = resolved,
+                        songNative = chain.thisObject,
+                    )
                 }
+                resolved
             }
             ProviderLogger.debug(
                 "Apple Music 原生在线翻译可用性 Hook 已安装: " +
@@ -3646,8 +3693,11 @@ internal class AppleLyricsSupplementHooks(
 
     private fun hasAnyOnlineTranslation(songId: String?): Boolean =
         (isNativeOnlineTranslationEnabled() && nativeOnlineTranslationStore.hasTranslation(songId)) ||
-            missingLyricsSupplement().hasTranslation(songId) ||
-            missingLyricsSupplement().hasLunaBeatSource(songId)
+            missingLyricsSupplement().hasTranslation(songId)
+    // 注意：这里刻意不计入 hasLunaBeatSource。LB 来源的歌曲靠
+    // ensureMissingLyricsTranslationButtonVisible（hasSupplementContent）强制保留
+    // translations_button 作为来源菜单入口，与“是否有翻译”无关；若把 LB 计入
+    // 翻译可用性，Apple 会在无翻译的 LB 歌曲菜单里渲染无效的「隐藏翻译」项。
 
     private fun onlinePronunciationForNativeLine(line: Any?): String? {
         if (line == null || !isNativeOnlineTranslationEnabled()) return null

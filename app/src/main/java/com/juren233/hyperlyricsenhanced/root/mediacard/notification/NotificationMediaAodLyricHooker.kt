@@ -551,7 +551,9 @@ object NotificationMediaAodLyricHooker {
         "com.android.systemui.media.controls.shared.model.MediaData"
     private const val DOZE_SERVICE_HOST_CLASS =
         "com.android.systemui.statusbar.phone.DozeServiceHost"
-    private const val DOZE_TICK_RUNNABLE_CLASS =
+    // 原始 DEX 锁定的双 $ 脱糖类名（DozeUi$$ExternalSyntheticLambda0）；
+    // 单 $ 的 jadx 风格别名是错误标识，回归测试锁定全名。
+    internal const val DOZE_TICK_RUNNABLE_CLASS =
         "com.android.systemui.doze.DozeUi\$\$ExternalSyntheticLambda0"
     private const val AOD_PLUGIN_VIEW_CLASS = "com.miui.aod.AODView"
     private const val OVERLAY_TAG = "hyperlyrics_aod_media_lyrics"
@@ -3865,7 +3867,7 @@ object NotificationMediaAodLyricHooker {
 
     private class DozeRefreshApi private constructor(
         val hostConstructors: List<Constructor<*>>,
-        private val tickRunnableConstructor: Constructor<*>
+        private val tickRunnableFactory: DozeTickRunnableFactory
     ) {
         private var hostReference = WeakReference<Any>(null)
         private var didLogFirstTick = false
@@ -3882,7 +3884,7 @@ object NotificationMediaAodLyricHooker {
                 return
             }
             runCatching {
-                (tickRunnableConstructor.newInstance(host) as Runnable).run()
+                tickRunnableFactory.create(host).run()
             }
                 .onSuccess {
                     if (!didLogFirstTick) {
@@ -3901,9 +3903,10 @@ object NotificationMediaAodLyricHooker {
                     hostConstructors = hostClass.declaredConstructors
                         .onEach { it.isAccessible = true }
                         .toList(),
-                    tickRunnableConstructor = tickRunnableClass
-                        .getDeclaredConstructor(hostClass)
-                        .apply { isAccessible = true }
+                    tickRunnableFactory = DozeTickRunnableFactory.resolve(
+                        tickRunnableClass,
+                        hostClass,
+                    )
                 )
             }
         }

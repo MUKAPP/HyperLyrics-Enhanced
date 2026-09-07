@@ -163,6 +163,92 @@ class OfficialProviderDexMethodCacheCodecTest {
     }
 
     @Test
+    fun `cache key includes annotation anchor semantics`() {
+        val base = OfficialProviderDexMethodQuery(
+            cacheKey = "spotify-lyrics-service-v2",
+            requiredMethodAnnotation = OfficialProviderMethodAnnotationConstraint(
+                elementValue = "color-lyrics/v2/track/{trackId}",
+            ),
+        )
+        val first = OfficialProviderDexMethodCacheCodec.cacheKey(
+            packageName = "com.spotify.music",
+            processName = "com.spotify.music",
+            versionCode = 145767611L,
+            lastUpdateTime = 1L,
+            query = base,
+        )
+        assertNotEquals(
+            first,
+            OfficialProviderDexMethodCacheCodec.cacheKey(
+                packageName = "com.spotify.music",
+                processName = "com.spotify.music",
+                versionCode = 145767611L,
+                lastUpdateTime = 1L,
+                query = base.copy(
+                    requiredMethodAnnotation = OfficialProviderMethodAnnotationConstraint(
+                        elementValue = "color-lyrics/v3/track/{trackId}",
+                    ),
+                ),
+            ),
+        )
+        assertEquals(
+            first,
+            OfficialProviderDexMethodCacheCodec.cacheKey(
+                packageName = "com.spotify.music",
+                processName = "com.spotify.music",
+                versionCode = 145767611L,
+                lastUpdateTime = 1L,
+                query = base.copy(),
+            ),
+        )
+    }
+
+    @Test
+    fun `cache key includes declaring class field constraints`() {
+        val reference = OfficialProviderDexTypeReference(
+            queryCacheKey = "spotify-lyrics-service-v3",
+            source = OfficialProviderDexTypeSource.DECLARING_CLASS,
+        )
+        val base = OfficialProviderDexMethodQuery(
+            cacheKey = "spotify-lyrics-client-v3",
+            declaringClassFieldReferences = listOf(reference),
+            parameterTypeNames = listOf("java.lang.String", "java.lang.String"),
+            returnTypeName = "io.reactivex.rxjava3.core.Single",
+        )
+        val first = OfficialProviderDexMethodCacheCodec.cacheKey(
+            packageName = "com.spotify.music",
+            processName = "com.spotify.music",
+            versionCode = 145767611L,
+            lastUpdateTime = 1L,
+            query = base,
+        )
+        assertNotEquals(
+            first,
+            OfficialProviderDexMethodCacheCodec.cacheKey(
+                packageName = "com.spotify.music",
+                processName = "com.spotify.music",
+                versionCode = 145767611L,
+                lastUpdateTime = 1L,
+                query = base.copy(declaringClassFieldTypeNames = listOf("p.sja0")),
+            ),
+        )
+        assertNotEquals(
+            first,
+            OfficialProviderDexMethodCacheCodec.cacheKey(
+                packageName = "com.spotify.music",
+                processName = "com.spotify.music",
+                versionCode = 145767611L,
+                lastUpdateTime = 1L,
+                query = base.copy(
+                    declaringClassFieldReferences = listOf(
+                        reference.copy(queryCacheKey = "spotify-lyrics-service-v2"),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun `cross version method baseline round trips structural identity`() {
         val baseline = OfficialProviderDexMethodBaseline(
             fieldCount = 18,
