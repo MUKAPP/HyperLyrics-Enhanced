@@ -350,7 +350,8 @@ class AppleAtmosVolumeProcessorTest {
 
         processor.onAudioVariantChanged(player, 4, 1002L, -19f, 6)
         assertEquals(1, creations.size)
-        assertFalse(creations.single().effect.released)
+        // A new Period must release the old boost even before its Session callback arrives.
+        assertTrue(creations.single().effect.released)
 
         processor.onSpeakerTrackPlayed(82, 502)
         processor.onAudioSessionId(player, 82)

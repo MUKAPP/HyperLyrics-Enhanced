@@ -65,6 +65,12 @@ internal class ApplePlaybackHooks(
     private val atmosphereVariantCallbackHit = AtomicBoolean(false)
     private val atmosphereVolumeProcessor = AppleAtmosVolumeProcessor(isVolumeBalanceEnabled)
     private val atmosphereLoudnessMetadataHooks = AppleAtmosLoudnessMetadataHooks(runtime)
+    private val atmospherePcmMonitor = AppleAtmosPcmMonitor(
+        runtime = runtime,
+        captureContext = atmosphereVolumeProcessor::capturePcmContext,
+        onWindow = atmosphereVolumeProcessor::onPcmWindow,
+        onDiscontinuity = atmosphereVolumeProcessor::onPcmDiscontinuity,
+    )
     private val atmosphereRoutingListeners =
         WeakIdentityMap<AudioTrack, AudioRouting.OnRoutingChangedListener>()
     private val atmosphereReleaseSessionIds = WeakIdentityMap<AudioTrack, Int>()
@@ -261,6 +267,7 @@ internal class ApplePlaybackHooks(
 
     private fun hookAtmosVolumeBalance() {
         atmosphereLoudnessMetadataHooks.installHooks()
+        atmospherePcmMonitor.installHooks()
         hookAtmosAudioTrackLifecycle()
         val audioSessionMethod = runtime.hookResolver.resolveMethod(
             AppleMusicHookPoint.EXO_AUDIO_SESSION_ID

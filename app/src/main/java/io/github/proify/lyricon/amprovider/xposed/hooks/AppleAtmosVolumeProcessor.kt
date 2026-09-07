@@ -7,7 +7,7 @@
 package io.github.proify.lyricon.amprovider.xposed.hooks
 
 import android.media.AudioDeviceInfo
-import android.media.audiofx.DynamicsProcessing
+import android.media.audiofx.LoudnessEnhancer
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -21,9 +21,6 @@ internal const val APPLE_ATMOS_FALLBACK_GAIN_DB = 6f
 internal const val APPLE_ATMOS_UNKNOWN_PEAK_MAX_GAIN_DB = 4f
 internal const val APPLE_ATMOS_MAX_INPUT_GAIN_DB = 10f
 internal const val APPLE_ATMOS_LIMITER_THRESHOLD_DBFS = -1f
-internal const val APPLE_ATMOS_LIMITER_ATTACK_MS = 1f
-internal const val APPLE_ATMOS_LIMITER_RELEASE_MS = 100f
-internal const val APPLE_ATMOS_LIMITER_RATIO = 20f
 internal const val APPLE_ATMOS_HOT_UPGRADE_RAMP_DURATION_MS = 240L
 internal const val APPLE_ATMOS_HOT_UPGRADE_RAMP_STEPS = 12
 
@@ -94,54 +91,87 @@ internal fun resolveAppleAtmosGain(
 }
 
 internal interface AppleSessionDynamicsEffect {
+    val effectKind: String get() = "loudness_enhancer"
+
     fun setEnabled(enabled: Boolean)
     fun setInputGainDb(inputGainDb: Float)
     fun release()
     fun scheduleDiagnosticVerification(context: String) = Unit
 }
 
-private class AndroidAppleSessionDynamicsEffect(
+internal data class AppleAtmosPcmGainDecision(
+    val desiredBoostDb: Float,
+    val peakCapDb: Float,
+    val targetBoostDb: Float,
+)
+
+/**
+ * 已播放部分的累计 PCM 电平决策（不是整曲预分析或 LUFS）：
+ * 期望提升 = 普通音源有效参考电平 - 杜比累计有效电平（只提升不衰减），
+ * 安全封顶 = 实测峰值距数字满幅的余量，取小者。
+ * 不对短窗做直接 AGC；累计目标仍可能渐进变化，样本峰值不能保证未来峰值不超限。
+ */
+internal fun resolveAppleAtmosPcmGain(
+    referenceFrontDbfs: Float,
+    atmosIntegratedFrontDbfs: Float,
+    learnedPeakDbfs: Float,
+): AppleAtmosPcmGainDecision {
+    if (!referenceFrontDbfs.isFinite() || !atmosIntegratedFrontDbfs.isFinite()) {
+        return AppleAtmosPcmGainDecision(0f, 0f, 0f)
+    }
+    val desired = (referenceFrontDbfs - atmosIntegratedFrontDbfs)
+        .coerceIn(0f, APPLE_ATMOS_MAX_INPUT_GAIN_DB)
+    val peakCap = if (learnedPeakDbfs.isFinite()) {
+        (APPLE_ATMOS_PCM_PEAK_CEILING_DBFS - learnedPeakDbfs)
+            .coerceIn(0f, APPLE_ATMOS_MAX_INPUT_GAIN_DB)
+    } else {
+        0f
+    }
+    val target = minOf(desired, peakCap)
+    return AppleAtmosPcmGainDecision(desired, peakCap, target)
+}
+
+/** 普通立体声音源有效电平的功率域指数滑动平均；首个有效窗口初始化。 */
+internal fun mixAppleAtmosReferenceDb(
+    currentDb: Float?,
+    windowDb: Float,
+    alpha: Float = APPLE_ATMOS_PCM_REFERENCE_EMA_ALPHA,
+): Float {
+    if (!windowDb.isFinite()) return currentDb?.takeIf { it.isFinite() }
+        ?: APPLE_ATMOS_PCM_FALLBACK_REFERENCE_DBFS
+    if (currentDb == null || !currentDb.isFinite()) return windowDb
+    val weight = alpha.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
+        ?: APPLE_ATMOS_PCM_REFERENCE_EMA_ALPHA
+    val currentPower = Math.pow(10.0, (currentDb / 10f).toDouble())
+    val windowPower = Math.pow(10.0, (windowDb / 10f).toDouble())
+    val mixed = (1 - weight) * currentPower + weight * windowPower
+    return (10.0 * Math.log10(mixed)).toFloat()
+}
+
+// AM-ATMOS-IMMERSIVE-001：DynamicsProcessing 在 HyperOS 4 多声道 Atmos 路径上会触发系统流
+// 音量衰减被整体绕过（最低音量过响，2026-09-07 真机功率历史证实）；LoudnessEnhancer 挂同一
+// 会话无此问题，因此统一使用 LoudnessEnhancer，不再使用 DynamicsProcessing。
+private class AndroidAppleSessionLoudnessEffect(
     audioSessionId: Int,
-    channelCount: Int,
     initialInputGainDb: Float,
 ) : AppleSessionDynamicsEffect {
-    private val effect = DynamicsProcessing(
-        0,
-        audioSessionId,
-        DynamicsProcessing.Config.Builder(
-            DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION,
-            channelCount.coerceAtLeast(1),
-            false,
-            0,
-            false,
-            0,
-            false,
-            0,
-            true,
-        )
-            .setPreferredFrameDuration(10f)
-            .setInputGainAllChannelsTo(initialInputGainDb)
-            .setLimiterAllChannelsTo(
-                DynamicsProcessing.Limiter(
-                    true,
-                    true,
-                    0,
-                    APPLE_ATMOS_LIMITER_ATTACK_MS,
-                    APPLE_ATMOS_LIMITER_RELEASE_MS,
-                    APPLE_ATMOS_LIMITER_RATIO,
-                    APPLE_ATMOS_LIMITER_THRESHOLD_DBFS,
-                    0f,
-                )
-            )
-            .build(),
-    )
+    private val effect = LoudnessEnhancer(audioSessionId).also { created ->
+        try {
+            created.setTargetGain((initialInputGainDb * 100f).toInt())
+        } catch (error: Throwable) {
+            runCatching(created::release)
+            throw error
+        }
+    }
+
+    override val effectKind = "loudness_enhancer"
 
     override fun setEnabled(enabled: Boolean) {
         effect.enabled = enabled
     }
 
     override fun setInputGainDb(inputGainDb: Float) {
-        effect.setInputGainAllChannelsTo(inputGainDb)
+        effect.setTargetGain((inputGainDb * 100f).toInt())
     }
 
     override fun release() {
@@ -154,16 +184,7 @@ private class AndroidAppleSessionDynamicsEffect(
         listOf(100L, 1_000L).forEach { delayMs ->
             handler.postDelayed({
                 val state = runCatching {
-                    val channels = effect.channelCount
-                    val gains = (0 until channels).joinToString(",") { index ->
-                        effect.getInputGainByChannelIndex(index).toString()
-                    }
-                    val limiter = effect.getLimiterByChannelIndex(0)
-                    "enabled=${effect.enabled},configuredChannels=$channels," +
-                        "inputGains=[$gains],limiterEnabled=${limiter.isEnabled}," +
-                        "limiterInUse=${limiter.isInUse}," +
-                        "limiterThresholdDb=${limiter.threshold}," +
-                        "limiterRatio=${limiter.ratio}"
+                    "enabled=${effect.enabled},targetGainmB=${effect.targetGain}"
                 }.fold(
                     onSuccess = { it },
                     onFailure = { error ->
@@ -171,8 +192,9 @@ private class AndroidAppleSessionDynamicsEffect(
                     },
                 )
                 ProviderLogger.diagnostic(
-                    "[AtmosVolumeDiag] event=dynamics_verify,elapsedMs=" +
-                        "${atmosphereDiagnosticElapsedRealtime()},delayMs=$delayMs,$context,$state"
+                    "[AtmosVolumeDiag] event=loudness_verify," +
+                        "elapsedMs=${atmosphereDiagnosticElapsedRealtime()}," +
+                        "delayMs=$delayMs,$context,$state"
                 )
             }, delayMs)
         }
@@ -186,8 +208,8 @@ internal class AppleAtmosVolumeProcessor(
         channelCount: Int,
         decision: AppleAtmosGainDecision,
         initialInputGainDb: Float,
-    ) -> AppleSessionDynamicsEffect = { sessionId, channelCount, _, initialInputGainDb ->
-        AndroidAppleSessionDynamicsEffect(sessionId, channelCount, initialInputGainDb)
+    ) -> AppleSessionDynamicsEffect = { sessionId, _, _, initialInputGainDb ->
+        AndroidAppleSessionLoudnessEffect(sessionId, initialInputGainDb)
     },
     private val scheduleDelayed: (delayMs: Long, action: () -> Unit) -> Unit =
         { delayMs, action -> Handler(Looper.getMainLooper()).postDelayed(action, delayMs) },
@@ -204,7 +226,23 @@ internal class AppleAtmosVolumeProcessor(
         var pendingHotUpgradeSessionId: Int = 0,
         var pendingHotUpgradeTrackIds: Set<Int> = emptySet(),
         var rampHotUpgradeOnNextApply: Boolean = false,
-    )
+        var pcmFrontPowerSum: Double = 0.0,
+        var pcmFrontFrameCount: Long = 0L,
+        var pcmLearnedPeakDbfs: Float = Float.NaN,
+    ) {
+        fun resetPcmStats() {
+            pcmFrontPowerSum = 0.0
+            pcmFrontFrameCount = 0L
+            pcmLearnedPeakDbfs = Float.NaN
+        }
+
+        fun integratedFrontPowerDb(): Float? =
+            if (pcmFrontFrameCount > 0L) {
+                (10.0 * Math.log10(pcmFrontPowerSum / pcmFrontFrameCount)).toFloat()
+            } else {
+                null
+            }
+    }
 
     private val playerStates = WeakIdentityMap<Any, PlayerState>()
     private val activeAudioTrackIdsBySession = mutableMapOf<Int, MutableSet<Int>>()
@@ -215,12 +253,17 @@ internal class AppleAtmosVolumeProcessor(
     private var activeEffectGeneration = 0L
     private var activeEffectInputGainDb = 0f
     private var failedSessionId = 0
+    private var nonAtmosReferenceDbfs: Float? = null
+    private var pcmGeneration = 0L
+    private var pcmTargetGainDb: Float? = null
 
     @Synchronized
     fun onPlayerActivated(player: Any) {
         if (activePlayer !== player) {
+            invalidatePcm()
             releaseActiveEffect("active_player_changed")
             activePlayer = player
+            playerStates[player]?.resetPcmStats()
             failedSessionId = 0
         }
         val state = playerState(player)
@@ -241,7 +284,9 @@ internal class AppleAtmosVolumeProcessor(
                 clearPendingHotUpgrade(state)
             }
             state.audioSessionId = audioSessionId
+            state.resetPcmStats()
             if (activePlayer === player) {
+                invalidatePcm()
                 releaseActiveEffect("player_session_changed")
                 failedSessionId = 0
             }
@@ -283,7 +328,17 @@ internal class AppleAtmosVolumeProcessor(
         state.peakMetadata = peakMetadata
         state.channelCount = channelCount.coerceAtLeast(1)
         state.sessionGenerationAtLastVariant = state.sessionGeneration
-        if (activePlayer === player) failedSessionId = 0
+        if (periodChanged || audioVariant != APPLE_AUDIO_VARIANT_DOLBY_ATMOS) {
+            state.resetPcmStats()
+        }
+        if (activePlayer === player) {
+            failedSessionId = 0
+            if (periodChanged || previousVariant != audioVariant) {
+                invalidatePcm()
+                // Numeric Session IDs can be reused. Never leave the old Period effect/ramp alive.
+                if (periodChanged) releaseActiveEffect("player_period_changed")
+            }
+        }
 
         // A cross-period transition may keep the numeric Session ID, but it must have produced a
         // fresh callback after the preceding variant before that Session can be associated with the
@@ -384,8 +439,12 @@ internal class AppleAtmosVolumeProcessor(
     ) {
         if (audioSessionId <= 0) return
         val route = resolveAppleAtmosOutputRoute(routedDeviceType)
-        activeAudioTrackIdsBySession.getOrPut(audioSessionId, ::mutableSetOf).add(trackIdentity)
+        val added = activeAudioTrackIdsBySession.getOrPut(audioSessionId, ::mutableSetOf).add(trackIdentity)
+        val routeChanged = audioTrackRoutes[trackIdentity] != route
         audioTrackRoutes[trackIdentity] = route
+        if ((added || routeChanged) && activePlayer?.let(playerStates::get)?.audioSessionId == audioSessionId) {
+            invalidatePcm()
+        }
         val player = activePlayer
         val state = player?.let(playerStates::get)
         if (player != null && state != null) {
@@ -412,7 +471,12 @@ internal class AppleAtmosVolumeProcessor(
     ) {
         val route = resolveAppleAtmosOutputRoute(routedDeviceType)
         val isTracked = trackIdentity in activeAudioTrackIdsBySession[audioSessionId].orEmpty()
-        if (isTracked) audioTrackRoutes[trackIdentity] = route
+        if (isTracked) {
+            if (audioTrackRoutes[trackIdentity] != route &&
+                activePlayer?.let(playerStates::get)?.audioSessionId == audioSessionId
+            ) invalidatePcm()
+            audioTrackRoutes[trackIdentity] = route
+        }
         val player = activePlayer ?: return
         val state = playerStates[player] ?: return
         logProcessorState(
@@ -430,6 +494,9 @@ internal class AppleAtmosVolumeProcessor(
 
     @Synchronized
     fun onAudioTrackStopped(audioSessionId: Int, trackIdentity: Int, source: String) {
+        if (trackIdentity in activeAudioTrackIdsBySession[audioSessionId].orEmpty() &&
+            activePlayer?.let(playerStates::get)?.audioSessionId == audioSessionId
+        ) invalidatePcm()
         audioTrackRoutes.remove(trackIdentity)
         activeAudioTrackIdsBySession[audioSessionId]?.let { tracks ->
             tracks.remove(trackIdentity)
@@ -474,6 +541,8 @@ internal class AppleAtmosVolumeProcessor(
 
     @Synchronized
     fun onPreferenceChanged() {
+        invalidatePcm()
+        if (!runCatching(preferenceEnabled).getOrDefault(false)) nonAtmosReferenceDbfs = null
         failedSessionId = 0
         activePlayer?.let { player ->
             playerStates[player]?.let { state ->
@@ -483,10 +552,220 @@ internal class AppleAtmosVolumeProcessor(
         reconcileActivePlayer("preference_changed")
     }
 
+    private fun invalidatePcm(resetStats: Boolean = true) {
+        pcmGeneration++
+        if (resetStats) {
+            activePlayer?.let(playerStates::get)?.resetPcmStats()
+            pcmTargetGainDb = null
+            activeEffectGeneration++
+        }
+    }
+
+    @Synchronized
+    fun capturePcmContext(audioSessionId: Int, trackIdentity: Int): AppleAtmosPcmContext? {
+        if (!runCatching(preferenceEnabled).getOrDefault(false)) return null
+        val state = activePlayer?.let(playerStates::get) ?: return null
+        if (audioSessionId <= 0 || state.audioVariant < 0 ||
+            state.pendingHotUpgradeTrackIds.isNotEmpty()
+        ) return null
+        val isStateSession = audioSessionId == state.audioSessionId
+        // Renderer switches can start a new AudioTrack session without a player session
+        // callback (AM-ATMOS-IMMERSIVE-001 2026-09-07 真机：Atmos 3401 → ALAC 3321 无回调)。
+        // 非 Atmos 期间放行本进程内已注册的真实扬声器音轨；Atmos 期间仍要求状态会话严格一致。
+        if (!isStateSession && state.audioVariant == APPLE_AUDIO_VARIANT_DOLBY_ATMOS) return null
+        if (trackIdentity !in activeAudioTrackIdsBySession[audioSessionId].orEmpty() ||
+            audioTrackRoutes[trackIdentity] != AppleAtmosOutputRoute.BUILT_IN_SPEAKER ||
+            outputRouteForSession(audioSessionId) != AppleAtmosOutputRoute.BUILT_IN_SPEAKER
+        ) return null
+        return AppleAtmosPcmContext(audioSessionId, trackIdentity, pcmGeneration)
+    }
+
+    @Synchronized
+    fun onPcmDiscontinuity(audioSessionId: Int, trackIdentity: Int, flush: Boolean) {
+        if (audioSessionId != activePlayer?.let(playerStates::get)?.audioSessionId ||
+            trackIdentity !in activeAudioTrackIdsBySession[audioSessionId].orEmpty()
+        ) return
+        invalidatePcm(resetStats = flush)
+        if (flush) reconcileActivePlayer("pcm_flush")
+    }
+
+    /** Only the active speaker Track/Period may contribute a successful-write PCM window. */
+    @Synchronized
+    fun onPcmWindow(window: AppleAtmosPcmWindow) {
+        if (window.context != capturePcmContext(window.sessionId, window.context.trackIdentity)) return
+        if (window.frameCount <= 0 || window.sampleRate !in 8_000..384_000 ||
+            window.channelCount !in 1..32 || !window.effectivePeakDbfs.isFinite()
+        ) return
+        val player = activePlayer ?: return
+        val state = playerStates[player] ?: return
+        if (window.sessionId != state.audioSessionId) {
+            // 已注册的异会话音轨（渲染器切换未触发会话回调）只允许学习响度参考，
+            // 严禁驱动 Atmos 增益路径：效果必须只挂在状态会话上。
+            if (state.audioVariant != APPLE_AUDIO_VARIANT_DOLBY_ATMOS &&
+                window.channelCount <= 2 && window.frontEffectiveDbfs.isFinite() &&
+                window.frontEffectiveDbfs >= APPLE_ATMOS_PCM_MIN_LEVEL_DBFS
+            ) {
+                updateNonAtmosReference(state, window)
+            }
+            return
+        }
+        if (state.audioVariant == APPLE_AUDIO_VARIANT_DOLBY_ATMOS) {
+            updateAtmosPcmGain(player, state, window)
+        } else if (window.channelCount <= 2 && window.frontEffectiveDbfs.isFinite() &&
+            window.frontEffectiveDbfs >= APPLE_ATMOS_PCM_MIN_LEVEL_DBFS
+        ) {
+            updateNonAtmosReference(state, window)
+        }
+    }
+
+    private fun updateAtmosPcmGain(
+        player: Any,
+        state: PlayerState,
+        window: AppleAtmosPcmWindow,
+    ) {
+        if (state.pcmLearnedPeakDbfs.isNaN() || window.effectivePeakDbfs > state.pcmLearnedPeakDbfs) {
+            state.pcmLearnedPeakDbfs = window.effectivePeakDbfs
+        }
+        val peakCap = (APPLE_ATMOS_PCM_PEAK_CEILING_DBFS - state.pcmLearnedPeakDbfs)
+            .coerceIn(0f, APPLE_ATMOS_MAX_INPUT_GAIN_DB)
+        val hasSignal = window.frontEffectiveDbfs.isFinite() &&
+            window.frontEffectiveDbfs >= APPLE_ATMOS_PCM_MIN_LEVEL_DBFS
+        if (hasSignal) {
+            // Gain is applied per write by the meter, not retroactively using the last volume.
+            val windowPower = Math.pow(10.0, (window.frontEffectiveDbfs / 10f).toDouble())
+            state.pcmFrontPowerSum += windowPower * window.frameCount
+            state.pcmFrontFrameCount += window.frameCount
+        }
+        val integratedFrontDb = state.integratedFrontPowerDb()
+        val reference = nonAtmosReferenceDbfs ?: APPLE_ATMOS_PCM_FALLBACK_REFERENCE_DBFS
+        val decision = if (integratedFrontDb != null) {
+            resolveAppleAtmosPcmGain(reference, integratedFrontDb, state.pcmLearnedPeakDbfs)
+        } else {
+            AppleAtmosPcmGainDecision(activeEffectInputGainDb, peakCap, minOf(activeEffectInputGainDb, peakCap))
+        }
+        if (BuildConfig.DEBUG) {
+            ProviderLogger.diagnostic(
+                "[AtmosVolumeDiag] event=pcm_control,elapsedMs=${atmosphereDiagnosticElapsedRealtime()}," +
+                    "player=${System.identityHashCode(player)},periodId=${state.periodId}," +
+                    "sessionId=${state.audioSessionId},integratedFrontDb=$integratedFrontDb," +
+                    "clientGainDb=${window.clientGainDb},atmosEffectiveDb=$integratedFrontDb," +
+                    "referenceDb=$reference,referenceSource=" +
+                    "${if (nonAtmosReferenceDbfs == null) "fallback" else "non_atmos_ema"}," +
+                    "learnedPeakDbfs=${state.pcmLearnedPeakDbfs}," +
+                    "windowPeakDbfs=${window.peakDbfs}," +
+                    "desiredBoostDb=${decision.desiredBoostDb},peakCapDb=${decision.peakCapDb}," +
+                    "targetBoostDb=${decision.targetBoostDb},commandedTargetDb=$pcmTargetGainDb," +
+                    "activeEffectSessionId=$activeEffectSessionId," +
+                    "activeEffectInputGainDb=$activeEffectInputGainDb"
+            )
+        }
+        if (activeEffect == null || activeEffectSessionId != state.audioSessionId) return
+        val commanded = pcmTargetGainDb ?: activeEffectInputGainDb
+        if (peakCap < maxOf(commanded, activeEffectInputGainDb)) {
+            // Observed peak headroom takes precedence over both hysteresis and a pending rise.
+            applyGainToActiveEffect(player, state, minOf(peakCap, decision.targetBoostDb),
+                "pcm_safety_down", immediate = true)
+            return
+        }
+        if (!hasSignal) return // Silence must not request a boost or contaminate the reference.
+        val target = decision.targetBoostDb
+        val reason = when {
+            target >= commanded + APPLE_ATMOS_PCM_UP_HYSTERESIS_DB -> "pcm_target_up"
+            target <= commanded - APPLE_ATMOS_PCM_DOWN_HYSTERESIS_DB -> "pcm_target_down"
+            else -> return
+        }
+        // Quiet intros cannot cause a single large step to the +10 dB ceiling.
+        applyGainToActiveEffect(player, state, minOf(target, commanded + 1f), reason)
+    }
+
+    private fun updateNonAtmosReference(state: PlayerState, window: AppleAtmosPcmWindow) {
+        val previous = nonAtmosReferenceDbfs
+        // 响侧离群门限：比当前参考响出 6 dB 的窗口视为未做 Sound Check 的爆响流
+        // （如杜比歌的立体声起播段），拒绝入库；低于参考的窗口正常接受，保证可向下恢复。
+        if (previous != null && previous.isFinite() &&
+            window.frontEffectiveDbfs > previous + APPLE_ATMOS_PCM_REFERENCE_MAX_ABOVE_DB
+        ) {
+            if (BuildConfig.DEBUG) {
+                ProviderLogger.diagnostic(
+                    "[AtmosVolumeDiag] event=pcm_reference_skip," +
+                        "elapsedMs=${atmosphereDiagnosticElapsedRealtime()}," +
+                        "sessionId=${state.audioSessionId},variant=${state.audioVariant}," +
+                        "windowEffectiveDb=${window.frontEffectiveDbfs}," +
+                        "referenceDb=$previous,limitDb=${previous + APPLE_ATMOS_PCM_REFERENCE_MAX_ABOVE_DB}"
+                )
+            }
+            return
+        }
+        val updated = mixAppleAtmosReferenceDb(previous, window.frontEffectiveDbfs)
+        nonAtmosReferenceDbfs = updated
+        if (BuildConfig.DEBUG && previous != updated) {
+            ProviderLogger.diagnostic(
+                "[AtmosVolumeDiag] event=pcm_reference," +
+                    "elapsedMs=${atmosphereDiagnosticElapsedRealtime()}," +
+                    "sessionId=${state.audioSessionId},variant=${state.audioVariant}," +
+                    "frontRmsDbfs=${window.frontRmsDbfs},clientGainDb=${window.clientGainDb}," +
+                    "windowEffectiveDb=${window.frontEffectiveDbfs}," +
+                    "previousDb=$previous,updatedDb=$updated"
+            )
+        }
+    }
+
+    private fun applyGainToActiveEffect(
+        player: Any,
+        state: PlayerState,
+        targetGainDb: Float,
+        reason: String,
+        immediate: Boolean = false,
+    ) {
+        val effect = activeEffect ?: return
+        activeEffectGeneration += 1L
+        val effectGeneration = activeEffectGeneration
+        pcmTargetGainDb = targetGainDb
+        if (immediate) {
+            runCatching { effect.setInputGainDb(targetGainDb) }
+                .onSuccess {
+                    activeEffectInputGainDb = targetGainDb
+                    if (BuildConfig.DEBUG) {
+                        effect.scheduleDiagnosticVerification("sessionId=${state.audioSessionId}," +
+                            "reason=$reason,expectedInputGainDb=$targetGainDb")
+                    }
+                }
+                .onFailure {
+                    failedSessionId = state.audioSessionId
+                    ProviderLogger.error("Apple Music PCM 峰值保护增益更新失败", it)
+                    releaseActiveEffect("pcm_safety_update_failed")
+                }
+            return
+        }
+        logProcessorState(
+            event = "processor_reconcile",
+            action = "pcm_gain_update",
+            player = player,
+            state = state,
+            extra = "reason=$reason,fromInputGainDb=$activeEffectInputGainDb," +
+                "targetInputGainDb=$targetGainDb",
+        )
+        scheduleInputGainRamp(
+            effect = effect,
+            effectGeneration = effectGeneration,
+            playerIdentity = System.identityHashCode(player),
+            periodId = state.periodId,
+            sessionId = state.audioSessionId,
+            fromInputGainDb = activeEffectInputGainDb,
+            targetInputGainDb = targetGainDb,
+            reason = reason,
+            durationMs = APPLE_ATMOS_PCM_RAMP_DURATION_MS,
+            diagnosticContext = "player=${System.identityHashCode(player)}," +
+                "periodId=${state.periodId},sessionId=${state.audioSessionId}," +
+                "expectedInputGainDb=$targetGainDb",
+        )
+    }
+
     @Synchronized
     fun onPlayerReleased(player: Any) {
         playerStates.remove(player)
         if (activePlayer === player) {
+            invalidatePcm()
             releaseActiveEffect("player_released")
             activePlayer = null
             failedSessionId = 0
@@ -532,7 +811,10 @@ internal class AppleAtmosVolumeProcessor(
         checkNotNull(state)
         val decision = resolveAppleAtmosGain(state.loudness, state.peakMetadata)
         if (activeEffect != null && activeEffectSessionId == state.audioSessionId) {
-            if (kotlin.math.abs(decision.inputGainDb - activeEffectInputGainDb) >= 0.05f) {
+            // PCM 校准接管后，重复元数据/路由通知不得覆盖累计目标。
+            if (pcmTargetGainDb == null &&
+                kotlin.math.abs(decision.inputGainDb - activeEffectInputGainDb) >= 0.05f
+            ) {
                 activeEffectGeneration += 1L
                 val effectGeneration = activeEffectGeneration
                 val effect = checkNotNull(activeEffect)
@@ -620,12 +902,13 @@ internal class AppleAtmosVolumeProcessor(
             val diagnosticContext =
                 "player=${System.identityHashCode(player)},periodId=$appliedPeriodId," +
                     "sessionId=$appliedSessionId,expectedInputGainDb=${decision.inputGainDb}"
-            runCatching {
-                ProviderLogger.info(
+            if (BuildConfig.DEBUG) runCatching {
+                ProviderLogger.diagnostic(
                     "[AtmosVolumeDiag] event=dynamics_apply," +
                         "elapsedMs=${atmosphereDiagnosticElapsedRealtime()}," +
                         "player=${System.identityHashCode(player)}," +
                         "periodId=$appliedPeriodId,sessionId=$appliedSessionId," +
+                        "effect=${effect.effectKind}," +
                         "loudness=${decision.metadataLoudness},channels=${state.channelCount}," +
                         "initialInputGainDb=$initialInputGainDb," +
                         "targetInputGainDb=${decision.inputGainDb}," +
@@ -635,9 +918,7 @@ internal class AppleAtmosVolumeProcessor(
                         "peakLimited=${decision.peakLimited}," +
                         "peakAssociation=${state.peakMetadata?.associationSource}," +
                         "hotUpgradeRamp=$hotUpgradeRamp,fallback=${decision.fallback}," +
-                        "outputRoute=$outputRoute," +
-                        "limiterThresholdDb=$APPLE_ATMOS_LIMITER_THRESHOLD_DBFS," +
-                        "limiterRatio=$APPLE_ATMOS_LIMITER_RATIO"
+                        "outputRoute=$outputRoute"
                 )
             }
             if (hotUpgradeRamp && decision.inputGainDb > initialInputGainDb) {
@@ -652,7 +933,7 @@ internal class AppleAtmosVolumeProcessor(
                     reason = "hot_upgrade",
                     diagnosticContext = diagnosticContext,
                 )
-            } else {
+            } else if (BuildConfig.DEBUG) {
                 effect.scheduleDiagnosticVerification(diagnosticContext)
             }
         }.onFailure { error ->
@@ -670,7 +951,7 @@ internal class AppleAtmosVolumeProcessor(
             )
             runCatching {
                 ProviderLogger.error(
-                    "Apple Music 当前音频会话不支持 DynamicsProcessing 音量平衡：" +
+                    "Apple Music 当前音频会话不支持 LoudnessEnhancer 音量提升：" +
                         "session=${state.audioSessionId}",
                     error,
                 )
@@ -688,16 +969,19 @@ internal class AppleAtmosVolumeProcessor(
         targetInputGainDb: Float,
         reason: String,
         diagnosticContext: String,
+        durationMs: Long = APPLE_ATMOS_HOT_UPGRADE_RAMP_DURATION_MS,
     ) {
         repeat(APPLE_ATMOS_HOT_UPGRADE_RAMP_STEPS) { zeroBasedStep ->
             val step = zeroBasedStep + 1
-            val delayMs = APPLE_ATMOS_HOT_UPGRADE_RAMP_DURATION_MS * step /
+            val delayMs = durationMs * step /
                 APPLE_ATMOS_HOT_UPGRADE_RAMP_STEPS
             scheduleDelayed(delayMs) {
                 synchronized(this@AppleAtmosVolumeProcessor) {
                     if (activeEffect !== effect ||
                         activeEffectGeneration != effectGeneration ||
-                        activeEffectSessionId != sessionId
+                        activeEffectSessionId != sessionId ||
+                        activePlayer?.let(System::identityHashCode) != playerIdentity ||
+                        activePlayer?.let(playerStates::get)?.periodId != periodId
                     ) {
                         return@synchronized
                     }
@@ -709,22 +993,22 @@ internal class AppleAtmosVolumeProcessor(
                         .onFailure { error ->
                             failedSessionId = sessionId
                             ProviderLogger.error(
-                                "Apple Music DynamicsProcessing 静态增益渐变失败：" +
+                                "Apple Music LoudnessEnhancer 增益渐变失败：" +
                                     "session=$sessionId, step=$step, reason=$reason",
                                 error,
                             )
                             releaseActiveEffect("input_gain_ramp_failed")
                             return@synchronized
                         }
-                    if (step == APPLE_ATMOS_HOT_UPGRADE_RAMP_STEPS) {
+                    if (BuildConfig.DEBUG && step == APPLE_ATMOS_HOT_UPGRADE_RAMP_STEPS) {
                         runCatching {
-                            ProviderLogger.info(
+                            ProviderLogger.diagnostic(
                                 "[AtmosVolumeDiag] event=dynamics_ramp_complete," +
                                     "elapsedMs=${atmosphereDiagnosticElapsedRealtime()}," +
                                 "player=$playerIdentity,periodId=$periodId," +
                                 "sessionId=$sessionId,inputGainDb=$inputGainDb," +
                                 "reason=$reason," +
-                                "durationMs=$APPLE_ATMOS_HOT_UPGRADE_RAMP_DURATION_MS," +
+                                "durationMs=$durationMs," +
                                     "steps=$APPLE_ATMOS_HOT_UPGRADE_RAMP_STEPS"
                             )
                         }
@@ -742,6 +1026,8 @@ internal class AppleAtmosVolumeProcessor(
         return when {
             routes.any { it == AppleAtmosOutputRoute.NON_SPEAKER } ->
                 AppleAtmosOutputRoute.NON_SPEAKER
+            routes.any { it == AppleAtmosOutputRoute.UNKNOWN } ->
+                AppleAtmosOutputRoute.UNKNOWN
             routes.any { it == AppleAtmosOutputRoute.BUILT_IN_SPEAKER } ->
                 AppleAtmosOutputRoute.BUILT_IN_SPEAKER
             else -> AppleAtmosOutputRoute.UNKNOWN
@@ -762,13 +1048,14 @@ internal class AppleAtmosVolumeProcessor(
             "peakLimited=${decision.peakLimited},fallback=${decision.fallback}"
 
     private fun releaseActiveEffect(reason: String) {
+        pcmTargetGainDb = null
         val effect = activeEffect ?: return
-        runCatching {
-            ProviderLogger.info(
+        if (BuildConfig.DEBUG) runCatching {
+            ProviderLogger.diagnostic(
                 "[AtmosVolumeDiag] event=dynamics_release," +
                     "elapsedMs=${atmosphereDiagnosticElapsedRealtime()}," +
                     "player=${activePlayer?.let(System::identityHashCode)}," +
-                    "sessionId=$activeEffectSessionId,reason=$reason"
+                    "sessionId=$activeEffectSessionId,effect=${effect.effectKind},reason=$reason"
             )
         }
         activeEffectGeneration += 1L
@@ -777,6 +1064,7 @@ internal class AppleAtmosVolumeProcessor(
         activeEffect = null
         activeEffectSessionId = 0
         activeEffectInputGainDb = 0f
+        pcmTargetGainDb = null
     }
 
     private fun logProcessorState(
