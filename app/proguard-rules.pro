@@ -55,6 +55,8 @@
 -keep class com.juren233.hyperlyricsenhanced.provider.OfficialProviderDexTypeSource { *; }
 -keep class com.juren233.hyperlyricsenhanced.provider.OfficialProviderDexTypeReference { *; }
 -keep class com.juren233.hyperlyricsenhanced.provider.OfficialProviderDexMethodQuery { *; }
+-keep class com.juren233.hyperlyricsenhanced.provider.OfficialProviderMethodAnnotationConstraint { *; }
+-keep class com.juren233.hyperlyricsenhanced.provider.OfficialProviderDexMethodQueryBuilder { *; }
 -keep class com.juren233.hyperlyricsenhanced.provider.OfficialProviderNextTrackFrame { *; }
 -keep class com.juren233.hyperlyricsenhanced.provider.OfficialProviderControlProtocol { *; }
 

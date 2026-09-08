@@ -16,6 +16,7 @@ import com.juren233.hyperlyricsenhanced.common.lyric.AppleMissingLyricsSourceInf
 import com.juren233.hyperlyricsenhanced.common.lyric.AppleMissingLyricsSourceMetadata
 import com.juren233.hyperlyricsenhanced.common.lyric.AppleMissingLyricsSourceStatus
 import com.juren233.hyperlyricsenhanced.common.lyric.ApplePronunciationVisibilityPolicy
+import com.juren233.hyperlyricsenhanced.common.lyric.ChineseLyricsPolicy
 import com.juren233.hyperlyricsenhanced.common.lyric.LyricMetadataKeys
 import com.juren233.hyperlyricsenhanced.common.lyric.OnlineTranslationContentPolicy
 import com.juren233.hyperlyricsenhanced.common.lyric.TraditionalLyricsSimplifier
@@ -1347,6 +1348,19 @@ class LyriconSource : LyricSource {
             lineCount = match?.parsed?.wordLines?.size ?: 0,
         )
 
+    /** 全中文歌词不携带在线翻译：正文若全为中文，在线载荷的翻译列整体剔除。 */
+    private fun stripFullyChineseTranslations(lines: List<LrcLine>): List<LrcLine> {
+        if (!ChineseLyricsPolicy.isFullyChineseLrc(lines)) return lines
+        return lines.map { it.copy(translation = null) }
+    }
+
+    private fun OnlineLyricTargeter.FetchOutcome.stripFullyChineseTranslations():
+        OnlineLyricTargeter.FetchOutcome {
+        val lines = lines ?: return this
+        val stripped = stripFullyChineseTranslations(lines)
+        return if (stripped === lines) this else copy(lines = stripped)
+    }
+
     private fun applyFallbackResult(
         generation: Int,
         baseSong: LocalSong,
@@ -1355,6 +1369,9 @@ class LyriconSource : LyricSource {
         fallbackEnabled: Boolean,
         requestedSource: Source? = null,
     ) {
+        // 全中文正文不携带在线翻译：无歌词兜底/来源切换载荷的翻译列（常见为伴唱标注）
+        // 一并剔除，后续逐字与行级映射都以此为源。
+        val outcome = outcome.stripFullyChineseTranslations()
         val sourceSwitchRequest = activeSourceSwitchTraceRequest(baseSong.id)
             ?.takeIf { request ->
                 request.contentType == "lyrics" &&
@@ -1666,7 +1683,9 @@ class LyriconSource : LyricSource {
                                 .getMediaInfo(application, playerPackage, HookLogger)
                                 .album,
                         )
-                        val fallbackSong = lines?.let { OnlineFallbackSongMapper.map(baseSong, it) }
+                        val fallbackSong = lines
+                            ?.let(::stripFullyChineseTranslations)
+                            ?.let { OnlineFallbackSongMapper.map(baseSong, it) }
                         mainHandler.post {
                             applyThirdPartyFallbackResult(generation, baseSong, fallbackSong)
                         }
@@ -3018,10 +3037,13 @@ class LyriconSource : LyricSource {
                 song = song,
                 hideMandarinPinyin = isHideMandarinPinyinEnabled(),
             )
+        // 全中文歌词不需要在线翻译：语气词（whoa/oh/ayy 等，含符号连接）不改变判定，
+        // 避免「所有行都缺翻译」的中文歌被当成外文歌触发在线抓取。
+        val fullyChinese = ChineseLyricsPolicy.isFullyChinese(song)
         return song.lyrics?.any {
             !it.text.isNullOrBlank() &&
                 (
-                    !OnlineTranslationContentPolicy.isMeaningful(it.translation) ||
+                    (!fullyChinese && !OnlineTranslationContentPolicy.isMeaningful(it.translation)) ||
                         (completeOnlinePronunciation && it.roma.isNullOrBlank())
                     )
         } == true

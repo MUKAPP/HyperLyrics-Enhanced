@@ -59,7 +59,7 @@
     <string name="title_apple_music_app_features">App功能</string>
     <string name="title_apple_music_app_display">App显示</string>
     <string name="title_apple_music_volume_balance">动态提升Dolby Atmos外放音量</string>
-    <string name="summary_apple_music_volume_balance">开启Apple Music设置内“音量平衡”听感更佳</string>
+    <string name="summary_apple_music_volume_balance">开启Apple Music设置内“音量平衡”听感更佳，不建议开启系统沉浸声</string>
     <string name="title_apple_music_notification_open_full_player">点击媒体通知直接跳转播放页</string>
     <string name="title_apple_music_simplify_traditional_lyrics">将繁体歌词转成简体</string>
     <string name="title_apple_music_native_online_translation">补全歌词翻译与发音</string>
@@ -171,6 +171,17 @@
     <string name="lyric_source_lyricinfo">LyricInfo</string>
     <string name="title_lyric_acquisition_sources">获取来源</string>
     <string name="title_lyric_display_group">显示</string>
+    <string name="title_early_next_line_preview">提前预览下一句</string>
+    <string name="early_next_line_preview_off">不开启</string>
+    <string name="early_next_line_preview_immediate">唱完立即</string>
+    <string name="early_next_line_preview_100">提前100ms</string>
+    <string name="early_next_line_preview_200">提前200ms</string>
+    <string name="early_next_line_preview_300">提前300ms</string>
+    <string name="early_next_line_preview_400">提前400ms</string>
+    <string name="early_next_line_preview_custom">自定义</string>
+    <string name="title_early_next_line_preview_time">提前显示时间范围</string>
+    <string name="label_early_next_line_preview_ms">提前时间（ms）</string>
+    <string name="early_next_line_preview_ms">%1$d ms</string>
     <string name="title_remove_cjk_lyric_spaces">移除中日韩歌词中的空格</string>
     <string name="summary_remove_cjk_lyric_spaces">仅在超级岛、实时动态通知以及AOD中生效</string>
     <string name="title_custom_config">自定义配置</string>
@@ -740,4 +751,5 @@
     <string name="setup_completion_lyricinfo">安装歌词获取模块后，在 LSPosed 中启用并勾选音乐软件，重启系统界面即可使用</string>
     <string name="setup_completion_restart_hint">添加完插件请重启系统界面与对应的音乐 App 进程，你可以在主页右上角点击“一键刷新”按钮进行重启。</string>
     <string name="no_lyric_data">歌词源无数据</string>
+    <string name="title_apple_music_force_cellular_data_entry">强制平板显示蜂窝数据入口</string>
 </resources>

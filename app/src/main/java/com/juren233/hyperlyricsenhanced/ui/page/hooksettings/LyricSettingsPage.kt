@@ -1,6 +1,10 @@
 package com.juren233.hyperlyricsenhanced.ui.page.hooksettings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -10,12 +14,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.juren233.hyperlyricsenhanced.R
 import com.juren233.hyperlyricsenhanced.common.RootConstants
+import com.juren233.hyperlyricsenhanced.ui.component.NumberInputDialog
 import com.juren233.hyperlyricsenhanced.ui.component.TextInputDialog
 import com.juren233.hyperlyricsenhanced.ui.navigation.LocalNavigator
 import com.juren233.hyperlyricsenhanced.ui.navigation.Route
@@ -44,6 +50,37 @@ fun LyricSettingsPage() {
             ) ?: RootConstants.DEFAULT_HOOK_LYRIC_SOURCE
         )
     }
+    var earlyNextLinePreview by remember {
+        mutableStateOf(
+            prefs.getInt(
+                RootConstants.KEY_HOOK_EARLY_NEXT_LINE_PREVIEW,
+                RootConstants.DEFAULT_HOOK_EARLY_NEXT_LINE_PREVIEW,
+            ).takeIf { it in 0..RootConstants.EARLY_NEXT_LINE_PREVIEW_CUSTOM }
+                ?: RootConstants.DEFAULT_HOOK_EARLY_NEXT_LINE_PREVIEW
+        )
+    }
+    var earlyNextLinePreviewCustomMs by remember {
+        mutableStateOf(
+            prefs.getInt(
+                RootConstants.KEY_HOOK_EARLY_NEXT_LINE_PREVIEW_CUSTOM_MS,
+                RootConstants.DEFAULT_HOOK_EARLY_NEXT_LINE_PREVIEW_CUSTOM_MS,
+            ).coerceAtLeast(0)
+        )
+    }
+    var showEarlyNextLinePreviewDialog by remember { mutableStateOf(false) }
+    NumberInputDialog(
+        show = showEarlyNextLinePreviewDialog,
+        title = stringResource(R.string.title_early_next_line_preview_time),
+        label = stringResource(R.string.label_early_next_line_preview_ms),
+        initialValue = earlyNextLinePreviewCustomMs,
+        min = 0,
+        max = Int.MAX_VALUE,
+        onDismiss = { showEarlyNextLinePreviewDialog = false },
+        onConfirm = {
+            earlyNextLinePreviewCustomMs = it
+            saveConfig(RootConstants.KEY_HOOK_EARLY_NEXT_LINE_PREVIEW_CUSTOM_MS, it)
+        },
+    )
     var removeCjkLyricSpaces by remember {
         mutableStateOf(
             prefs.getBoolean(
@@ -248,6 +285,50 @@ fun LyricSettingsPage() {
                         saveConfig(RootConstants.KEY_HOOK_REMOVE_CJK_LYRIC_SPACES, it)
                     },
                 )
+            }
+        }
+
+        item(key = "early_next_line_preview") {
+            Card(
+                modifier = Modifier
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 12.dp)
+                    .fillMaxWidth()
+            ) {
+                OverlayDropdownPreference(
+                    title = stringResource(R.string.title_early_next_line_preview),
+                    items = listOf(
+                        stringResource(R.string.early_next_line_preview_off),
+                        stringResource(R.string.early_next_line_preview_immediate),
+                        stringResource(R.string.early_next_line_preview_100),
+                        stringResource(R.string.early_next_line_preview_200),
+                        stringResource(R.string.early_next_line_preview_300),
+                        stringResource(R.string.early_next_line_preview_400),
+                        stringResource(R.string.early_next_line_preview_custom),
+                    ),
+                    selectedIndex = earlyNextLinePreview,
+                    onSelectedIndexChange = {
+                        earlyNextLinePreview = it
+                        saveConfig(RootConstants.KEY_HOOK_EARLY_NEXT_LINE_PREVIEW, it)
+                    },
+                )
+                AnimatedVisibility(
+                    visible = earlyNextLinePreview == RootConstants.EARLY_NEXT_LINE_PREVIEW_CUSTOM,
+                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+                ) {
+                    ArrowPreference(
+                        title = stringResource(R.string.title_early_next_line_preview_time),
+                        endActions = {
+                            Text(
+                                stringResource(R.string.early_next_line_preview_ms, earlyNextLinePreviewCustomMs),
+                                fontSize = MiuixTheme.textStyles.body2.fontSize,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                            )
+                        },
+                        onClick = { showEarlyNextLinePreviewDialog = true },
+                    )
+                }
             }
         }
 

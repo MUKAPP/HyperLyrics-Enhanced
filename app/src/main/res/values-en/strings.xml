@@ -58,7 +58,7 @@
     <string name="title_apple_music_app_features">App Features</string>
     <string name="title_apple_music_app_display">App Display</string>
     <string name="title_apple_music_volume_balance">Dynamically Boost Dolby Atmos Speaker Volume</string>
-    <string name="summary_apple_music_volume_balance">Enable “Sound Check” in Apple Music settings for better results</string>
+    <string name="summary_apple_music_volume_balance">Enable “Sound Check” in Apple Music settings for better results. Enabling the system spatial audio is not recommended</string>
     <string name="title_apple_music_notification_open_full_player">Open the player directly from media notifications</string>
     <string name="title_apple_music_simplify_traditional_lyrics">Convert Traditional Chinese lyrics to Simplified Chinese</string>
     <string name="title_apple_music_native_online_translation">Fill missing lyric translations and pronunciations</string>
@@ -170,6 +170,17 @@
     <string name="lyric_source_lyricinfo">LyricInfo</string>
     <string name="title_lyric_acquisition_sources">Sources</string>
     <string name="title_lyric_display_group">Display</string>
+    <string name="title_early_next_line_preview">Preview next line early</string>
+    <string name="early_next_line_preview_off">Disabled</string>
+    <string name="early_next_line_preview_immediate">Immediately after line ends</string>
+    <string name="early_next_line_preview_100">100ms early</string>
+    <string name="early_next_line_preview_200">200ms early</string>
+    <string name="early_next_line_preview_300">300ms early</string>
+    <string name="early_next_line_preview_400">400ms early</string>
+    <string name="early_next_line_preview_custom">Custom</string>
+    <string name="title_early_next_line_preview_time">Preview lead time</string>
+    <string name="label_early_next_line_preview_ms">Lead time (ms)</string>
+    <string name="early_next_line_preview_ms">%1$d ms</string>
     <string name="title_remove_cjk_lyric_spaces">Remove spaces from Chinese, Japanese, and Korean lyrics</string>
     <string name="summary_remove_cjk_lyric_spaces">Only applies to HyperIsland, live activity notifications, and AOD</string>
     <string name="title_custom_config">Custom Configuration</string>

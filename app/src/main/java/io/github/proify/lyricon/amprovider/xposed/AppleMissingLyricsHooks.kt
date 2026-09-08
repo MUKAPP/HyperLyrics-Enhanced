@@ -13,6 +13,7 @@ import android.view.View
 import com.juren233.hyperlyricsenhanced.BuildConfig
 import com.juren233.hyperlyricsenhanced.common.RootConstants
 import com.juren233.hyperlyricsenhanced.common.lyric.AppleMissingLyricsSourceInfo
+import com.juren233.hyperlyricsenhanced.common.lyric.ChineseLyricsPolicy
 import com.juren233.hyperlyricsenhanced.lyric.model.Song
 import io.github.libxposed.api.XposedInterface.Chain
 import io.github.proify.lyricon.amprovider.xposed.internal.ThreadLocalStack
@@ -1614,6 +1615,14 @@ internal class AppleMissingLyricsHooks(
         }
     }
 
+    /** 全中文歌词不携带在线翻译：磁盘缓存恢复前剥离旧版本构建写入的翻译列。 */
+    private fun stripFullyChineseTranslations(song: Song): Song {
+        if (!ChineseLyricsPolicy.isFullyChinese(song)) return song
+        return song.copy(
+            lyrics = song.lyrics.orEmpty().map { line -> line.copy(translation = null) },
+        )
+    }
+
     private fun restoreCachedSupplement(songId: String) {
         if (store.hasContent(songId)) return
         val currentContentSongId = store.contentSongId()
@@ -1627,19 +1636,21 @@ internal class AppleMissingLyricsHooks(
         }
         attemptedDiskRestoreSongIds.add(songId)
         restoreAttemptContentSongId = currentContentSongId
-        val cached = DiskSongManager.loadMissingLyrics(songId) ?: run {
+        val loaded = DiskSongManager.loadMissingLyrics(songId) ?: run {
             ProviderLogger.debug(
                 "Apple Music 无歌词补充磁盘恢复未命中: id=$songId"
             )
             return
         }
-        if (cached.id != songId) {
+        if (loaded.id != songId) {
             ProviderLogger.debug(
                 "Apple Music 无歌词补充磁盘缓存 ID 不匹配: " +
-                    "expected=$songId, cached=${cached.id}"
+                    "expected=$songId, loaded=${loaded.id}"
             )
             return
         }
+        // 全中文翻译门禁同样适用于磁盘恢复：旧版本构建写入的缓存可能携带在线假翻译。
+        val cached = stripFullyChineseTranslations(loaded)
         val cachedIsLunaBeat = cached.metadata
             ?.getString(com.juren233.hyperlyricsenhanced.common.lyric.LyricMetadataKeys.APPLE_MISSING_LYRICS_SOURCE) ==
             SourceName.LUNA_BEAT

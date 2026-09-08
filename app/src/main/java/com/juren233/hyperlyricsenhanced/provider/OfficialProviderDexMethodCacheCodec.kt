@@ -59,6 +59,12 @@ internal object OfficialProviderDexMethodCacheCodec {
             append(query.returnTypeMatchesDeclaringClass)
             append('\u0000')
             append(query.isStatic?.toString().orEmpty())
+            append('\u0000')
+            append(query.requiredMethodAnnotation.fingerprint())
+            append('\u0000')
+            append(query.declaringClassFieldTypeNames.joinToString("\u0001"))
+            append('\u0000')
+            append(query.declaringClassFieldReferences.joinToString("\u0001") { it.fingerprint() })
         }.sha256()
         return "hle_dex_method_v1:$packageName:$processName:$versionCode:$lastUpdateTime:$fingerprint"
     }
@@ -110,6 +116,12 @@ internal object OfficialProviderDexMethodCacheCodec {
     private fun OfficialProviderDexTypeReference?.fingerprint(): String = this?.let { reference ->
         "${reference.queryCacheKey}:${reference.source}:${reference.parameterIndex}"
     }.orEmpty()
+
+    private fun OfficialProviderMethodAnnotationConstraint?.fingerprint(): String =
+        this?.let { constraint ->
+            "${constraint.annotationTypeName.orEmpty()}:" +
+                "${constraint.elementName.orEmpty()}:${constraint.elementValue}"
+        }.orEmpty()
 
     private fun String.encoded(): String = Base64.getUrlEncoder()
         .withoutPadding()

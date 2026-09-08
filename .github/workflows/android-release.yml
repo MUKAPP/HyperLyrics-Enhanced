@@ -2,9 +2,9 @@ name: Android Build & Release
 
 on:
   push:
-    branches: [main]
+    branches: [main, '[0-9]+.[0-9]+.[0-9]+']
   pull_request:
-    branches: [main]
+    branches: [main, '[0-9]+.[0-9]+.[0-9]+']
   workflow_dispatch:
 
 concurrency:
@@ -29,17 +29,22 @@ jobs:
         id: gate
         env:
           EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
         run: |
           set -euo pipefail
 
-          while IFS= read -r line; do
-            echo "$line" >> "$GITHUB_OUTPUT"
-          done < <(bash .github/scripts/resolve-version.sh)
+          resolved_version="$(bash .github/scripts/resolve-version.sh)"
+          printf '%s\n' "$resolved_version" >> "$GITHUB_OUTPUT"
 
           current_name="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=.*"([^"]+)".*/\1/p' app/build.gradle.kts | head -n1)"
           current_code="$(sed -nE 's/^[[:space:]]*versionCode[[:space:]]*=*[[:space:]]*([0-9]+).*/\1/p' app/build.gradle.kts | head -n1)"
 
-          if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+          # Development branches publish prereleases only, including manual runs.
+          # PRs still build stable candidates before they are merged into main.
+          if [[ "$EVENT_NAME" != "pull_request" && "$REF" != "refs/heads/main" && ! "$current_name" =~ -(beta|canary)$ ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Stable packages are published only from main; skipping development branch build"
+          elif [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
             echo "${EVENT_NAME} trigger, proceeding with resolved version"
           elif [[ "$current_name" =~ -(beta|canary)$ ]]; then
@@ -214,7 +219,7 @@ jobs:
           echo "$BODY_DELIMITER" >> "$GITHUB_OUTPUT"
 
       - name: 创建正式版发布 Create Stable Release
-        if: github.event_name != 'pull_request' && steps.gate.outputs.skip == 'false' && steps.gate.outputs.channel == 'stable'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.gate.outputs.skip == 'false' && steps.gate.outputs.channel == 'stable'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.gate.outputs.full_name }}
@@ -246,7 +251,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 同步 LSPosed 仓库资料 Sync LSPosed Metadata
-        if: github.event_name != 'pull_request' && steps.gate.outputs.skip == 'false' && steps.gate.outputs.channel == 'stable'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.gate.outputs.skip == 'false' && steps.gate.outputs.channel == 'stable'
         env:
           GH_TOKEN: ${{ secrets.LSP_REPO_TOKEN }}
           LSP_REPO: Xposed-Modules-Repo/com.juren233.hyperlyricsenhanced
@@ -277,7 +282,7 @@ jobs:
           fi
 
       - name: 发布到 LSPosed 仓库 Publish LSPosed Release
-        if: github.event_name != 'pull_request' && steps.gate.outputs.skip == 'false' && steps.gate.outputs.channel == 'stable'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.gate.outputs.skip == 'false' && steps.gate.outputs.channel == 'stable'
         env:
           GH_TOKEN: ${{ secrets.LSP_REPO_TOKEN }}
           LSP_REPO: Xposed-Modules-Repo/com.juren233.hyperlyricsenhanced

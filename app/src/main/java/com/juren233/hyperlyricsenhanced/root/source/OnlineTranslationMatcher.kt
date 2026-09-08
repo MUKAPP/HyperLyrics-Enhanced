@@ -1,6 +1,7 @@
 package com.juren233.hyperlyricsenhanced.root.source
 
 import com.juren233.hyperlyricsenhanced.lyric.LrcLine
+import com.juren233.hyperlyricsenhanced.common.lyric.ChineseLyricsPolicy
 import com.juren233.hyperlyricsenhanced.common.lyric.LyricMetadataKeys
 import com.juren233.hyperlyricsenhanced.common.lyric.OnlineTranslationContentPolicy
 import com.juren233.hyperlyricsenhanced.lyric.model.Song
@@ -132,6 +133,10 @@ internal object OnlineTranslationMatcher {
     }
 
     fun apply(song: Song, onlineLines: List<LrcLine>): Result {
+        // 全中文歌词不接受在线翻译：在线源即使命中（翻译列常为伴唱标注等伪翻译），
+        // 也只允许补充发音。fillMissing/composeContent 只会从候选结果拷贝翻译，
+        // 因此在这里拦住即可覆盖计分、来源选择与重匹配全部路径。
+        val allowTranslation = !ChineseLyricsPolicy.isFullyChinese(song)
         val candidates = onlineLines
             .asSequence()
             .sortedBy(LrcLine::startTimeMs)
@@ -178,12 +183,16 @@ internal object OnlineTranslationMatcher {
                 plan.candidateIndex,
                 plan.candidateIndex + plan.candidateSpan
             )
-            val translations = distributeTranslations(nativeGroup, candidateGroup)
+            val translations = if (allowTranslation) {
+                distributeTranslations(nativeGroup, candidateGroup)
+            } else {
+                null
+            }
             val romanizations = distributeRomanizations(nativeGroup, candidateGroup)
             nativeGroup.indices.forEach { offset ->
                 val targetIndex = nativeIndex + offset
                 val targetLine = matchedLyrics[targetIndex]
-                val translation = translations.getOrNull(offset)
+                val translation = translations?.getOrNull(offset)
                     ?.takeIf {
                         !OnlineTranslationContentPolicy.isMeaningful(targetLine.translation) &&
                             OnlineTranslationContentPolicy.isMeaningful(it.main)

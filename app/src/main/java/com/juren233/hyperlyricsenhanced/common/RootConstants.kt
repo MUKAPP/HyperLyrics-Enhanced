@@ -112,6 +112,13 @@ object RootConstants {
         "key_hook_remove_cjk_lyric_spaces"
 
 
+    const val KEY_HOOK_EARLY_NEXT_LINE_PREVIEW = "key_hook_early_next_line_preview"
+    const val KEY_HOOK_EARLY_NEXT_LINE_PREVIEW_CUSTOM_MS =
+        "key_hook_early_next_line_preview_custom_ms"
+    const val DEFAULT_HOOK_EARLY_NEXT_LINE_PREVIEW = 0
+    const val EARLY_NEXT_LINE_PREVIEW_CUSTOM = 6
+    const val DEFAULT_HOOK_EARLY_NEXT_LINE_PREVIEW_CUSTOM_MS = 100
+
     const val KEY_HOOK_ISLAND_LEFT_ALBUM = "key_hook_island_left_album"
     const val KEY_HOOK_ISLAND_ALBUM_COVER_STYLE = "key_hook_island_album_cover_style"
     const val KEY_HOOK_ISLAND_ALBUM_COVER_STYLE_APP_WHITELIST =
@@ -289,6 +296,8 @@ object RootConstants {
         "key_hook_apple_music_restore_cjk_original_metadata"
     const val KEY_HOOK_APPLE_MUSIC_NOTIFICATION_OPEN_FULL_PLAYER =
         "key_hook_apple_music_notification_open_full_player"
+    const val KEY_HOOK_APPLE_MUSIC_FORCE_CELLULAR_DATA_ENTRY =
+        "key_hook_apple_music_force_cellular_data_entry"
     const val KEY_HOOK_APPLE_MUSIC_VOLUME_BALANCE =
         "key_hook_apple_music_volume_balance"
     const val KEY_HOOK_APPLE_MUSIC_SIMPLIFY_TRADITIONAL_LYRICS =
@@ -348,6 +357,7 @@ object RootConstants {
     const val DEFAULT_HOOK_APPLE_MUSIC_LOCALIZED_METADATA_CACHE = true
     const val DEFAULT_HOOK_APPLE_MUSIC_RESTORE_CJK_ORIGINAL_METADATA = false
     const val DEFAULT_HOOK_APPLE_MUSIC_NOTIFICATION_OPEN_FULL_PLAYER = false
+    const val DEFAULT_HOOK_APPLE_MUSIC_FORCE_CELLULAR_DATA_ENTRY = false
     const val DEFAULT_HOOK_APPLE_MUSIC_VOLUME_BALANCE = false
     const val DEFAULT_HOOK_APPLE_MUSIC_SIMPLIFY_TRADITIONAL_LYRICS = false
     const val DEFAULT_HOOK_APPLE_MUSIC_NATIVE_ONLINE_TRANSLATION = false

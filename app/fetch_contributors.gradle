@@ -52,10 +52,10 @@ tasks.register("generateContributors") {
             println("Failed to fetch contributors, using local fallback: ${exception.message}")
             maintainerSource = contributorFallback[0]
             originalSources = [contributorFallback[1], contributorFallback[2]]
-            developmentSources = [contributorFallback[3]]
+            developmentSources = []
         }
 
-        ([maintainerSource] + originalSources + developmentSources).each { user ->
+        ([maintainerSource] + originalSources + developmentSources).findAll { it != null }.each { user ->
             def login = user["login"] as String
             try {
                 def userDetail = fetchJson("${githubApiUrl}/users/${login}") as Map<String, Object>
