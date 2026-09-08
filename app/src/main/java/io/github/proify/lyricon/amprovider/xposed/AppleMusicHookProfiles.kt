@@ -24,6 +24,9 @@ internal data class AppleMusicVersion(
  * 新版 Apple Music 适配应优先只修改本文件中的版本档案；业务 Hook 不应再直接写死这些类名。
  */
 internal enum class AppleMusicHookPoint {
+    SETTINGS_DATA_CATEGORY_BUILD,
+    SETTINGS_CELLULAR_SIM_CHECK,
+    CELLULAR_AVAILABILITY,
     MEDIA_API_LOCALIZATION,
     CONTENT_HTTP_LOCALIZATION,
     EXO_MEDIA_PLAYER,
@@ -504,6 +507,46 @@ internal object AppleMusicHookProfiles {
         versionName = "6.5.2",
         versionCodes = setOf(1586L),
         hookTargets = mapOf(
+            // Original 1586 classes3.dex: SettingsFragment.t1()V at 0x2d98e0
+            // calls LLa/c;->e(Landroid/content/Context;)Z at code-unit 0x00a1,
+            // then removes KEY_CATEGORY_DATA only when false. Preserve binary case La.c;
+            // do not substitute a JADX collision alias or rewritten package prefix.
+            AppleMusicHookPoint.SETTINGS_DATA_CATEGORY_BUILD to listOf(
+                AppleMusicHookTarget(
+                    className = "com.apple.android.music.settings.fragment.SettingsFragment",
+                    methodName = "t1",
+                    parameterCount = 0,
+                    parameterTypeNames = emptyList(),
+                    returnTypeName = "void",
+                    isStatic = false,
+                ),
+            ),
+            // Original descriptor LLa/c;->e(Landroid/content/Context;)Z, PUBLIC STATIC,
+            // code offset 0x162878: TelephonyManager.getSimState(), rejects 0 and 1.
+            AppleMusicHookPoint.SETTINGS_CELLULAR_SIM_CHECK to listOf(
+                AppleMusicHookTarget(
+                    className = "La.c",
+                    methodName = "e",
+                    parameterCount = 1,
+                    parameterTypeNames = listOf("android.content.Context"),
+                    returnTypeName = "boolean",
+                    isStatic = true,
+                ),
+            ),
+            // Original 1586 classes2.dex, code offset 0x47b930:
+            // Lcom/apple/android/music/playback/connectivity/FuseConnectivityChecker;
+            // ->isCellularAvailable()Z, PUBLIC instance, non-synthetic/non-bridge.
+            // Use this binary name, not a decompiler alias or the interface declaration.
+            AppleMusicHookPoint.CELLULAR_AVAILABILITY to listOf(
+                AppleMusicHookTarget(
+                    className = "com.apple.android.music.playback.connectivity.FuseConnectivityChecker",
+                    methodName = "isCellularAvailable",
+                    parameterCount = 0,
+                    parameterTypeNames = emptyList(),
+                    returnTypeName = "boolean",
+                    isStatic = false,
+                ),
+            ),
             // Verified from Apple Music 6.5.2 (1586) classes2.dex. These playback
             // callbacks retain the same exact descriptors as 6.5.0 and 6.5.1.
             AppleMusicHookPoint.EXO_AUDIO_SESSION_ID to listOf(exoAudioSessionIdTarget()),
@@ -2405,6 +2448,9 @@ internal class AppleMusicHookResolver(
             AppleMusicHookPoint.MEDIA_API_LOCALIZATION ->
                 Map::class.java.isAssignableFrom(method.returnType)
 
+            AppleMusicHookPoint.SETTINGS_DATA_CATEGORY_BUILD,
+            AppleMusicHookPoint.SETTINGS_CELLULAR_SIM_CHECK,
+            AppleMusicHookPoint.CELLULAR_AVAILABILITY,
             AppleMusicHookPoint.CONTENT_HTTP_LOCALIZATION,
             AppleMusicHookPoint.EXO_MEDIA_PLAYER,
             AppleMusicHookPoint.EXO_AUDIO_SESSION_ID,

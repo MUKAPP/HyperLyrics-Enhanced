@@ -738,4 +738,5 @@
     <string name="setup_completion_lyricinfo">安装歌词获取模块后，在 LSPosed 中启用并勾选音乐软件，重启系统界面即可使用</string>
     <string name="setup_completion_restart_hint">添加完插件请重启系统界面与对应的音乐 App 进程，你可以在主页右上角点击“一键刷新”按钮进行重启。</string>
     <string name="no_lyric_data">歌词源无数据</string>
+    <string name="title_apple_music_force_cellular_data_entry">强制平板显示蜂窝数据入口</string>
 </resources>

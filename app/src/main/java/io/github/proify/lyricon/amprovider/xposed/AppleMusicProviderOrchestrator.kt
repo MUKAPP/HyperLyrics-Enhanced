@@ -2313,6 +2313,24 @@ internal object AppleMusicProviderOrchestrator {
             installer = { actionSheetMetadataHooks.installHooks() },
         ),
         FunctionalAppleMusicHookModule(
+            "hookSettingsCellularDataEntry",
+            installer = {
+                io.github.proify.lyricon.amprovider.xposed.hooks.AppleCellularDataSettingsHooks(
+                    runtime,
+                    preferences = { contentUiLanguagePrefs },
+                ).install()
+            },
+        ),
+        FunctionalAppleMusicHookModule(
+            "hookCellularAvailability",
+            installer = {
+                io.github.proify.lyricon.amprovider.xposed.hooks.AppleCellularDataSettingsHooks(
+                    runtime,
+                    preferences = { contentUiLanguagePrefs },
+                ).installCellularAvailability()
+            },
+        ),
+        FunctionalAppleMusicHookModule(
             "hookMediaSessionMetadata",
             installer = { frameworkMetadataHooks.installMediaSessionMetadata() },
         ),

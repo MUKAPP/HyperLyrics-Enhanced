@@ -36,6 +36,14 @@ fun AppleMusicOptimizationPage(
 ) {
     val prefs = rememberHookPrefs()
     val saveConfig = rememberHookConfigSaver(prefs)
+    var forceCellularDataEntry by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                RootConstants.KEY_HOOK_APPLE_MUSIC_FORCE_CELLULAR_DATA_ENTRY,
+                RootConstants.DEFAULT_HOOK_APPLE_MUSIC_FORCE_CELLULAR_DATA_ENTRY,
+            )
+        )
+    }
     var contentUiLanguage by remember {
         mutableIntStateOf(
             prefs.getInt(
@@ -462,6 +470,17 @@ fun AppleMusicOptimizationPage(
                         lunaBeatWordLyrics = enabled
                         saveConfig(
                             RootConstants.KEY_HOOK_APPLE_MUSIC_LUNABEAT_WORD_LYRICS,
+                            enabled,
+                        )
+                    },
+                )
+                SwitchPreference(
+                    title = stringResource(R.string.title_apple_music_force_cellular_data_entry),
+                    checked = forceCellularDataEntry,
+                    onCheckedChange = { enabled ->
+                        forceCellularDataEntry = enabled
+                        saveConfig(
+                            RootConstants.KEY_HOOK_APPLE_MUSIC_FORCE_CELLULAR_DATA_ENTRY,
                             enabled,
                         )
                     },
