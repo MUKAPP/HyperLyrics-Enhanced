@@ -1,6 +1,7 @@
 package com.juren233.hyperlyricsenhanced.root
 
 import android.os.SystemClock
+import com.juren233.hyperlyricsenhanced.common.RootConstants
 import com.juren233.hyperlyricsenhanced.common.lyric.LyricMetadataKeys
 import com.juren233.hyperlyricsenhanced.lyric.model.RichLyricLine
 import com.juren233.hyperlyricsenhanced.lyric.model.Song
@@ -83,6 +84,38 @@ object LyriconDataBridge : StateResetter {
             event = "package_update_complete",
             details = "package=${MediaCardDiagnosticLogger.sanitize(packageName)}",
         )
+    }
+
+    @Volatile
+    private var earlyNextLinePreviewMs: Long? = null
+
+    fun configureEarlyNextLinePreview(mode: Int, customMs: Int) {
+        earlyNextLinePreviewMs = when (mode) {
+            1 -> 0L
+            2 -> 100L
+            3 -> 200L
+            4 -> 300L
+            5 -> 400L
+            RootConstants.EARLY_NEXT_LINE_PREVIEW_CUSTOM -> customMs.coerceAtLeast(0).toLong()
+            else -> null
+        }
+    }
+
+    /** Select only the immediate successor; keep its original word and translation timing. */
+    private fun earlyNextLinePreview(line: TimedLine?, position: Long): TimedLine? {
+        val advanceMs = earlyNextLinePreviewMs ?: return null
+        line ?: return null
+        if (line.metadata?.getBoolean(SongPreprocessor.KEY_TITLE_LINE) == true ||
+            line.metadata?.getBoolean(LyricMetadataKeys.INSTRUMENTAL) == true ||
+            line.end <= line.begin
+        ) return null
+        val next = line.next ?: return null
+        if (next.begin <= line.begin || next.text.isNullOrBlank() ||
+            next.metadata?.getBoolean(SongPreprocessor.KEY_TITLE_LINE) == true ||
+            next.metadata?.getBoolean(LyricMetadataKeys.INSTRUMENTAL) == true
+        ) return null
+        val previewStart = (line.end - advanceMs).coerceAtLeast(line.begin)
+        return next.takeIf { position >= previewStart && position < next.begin }
     }
 
     private var timingNavigator: TimingNavigator<TimedLine> = TimingNavigator(emptyArray())
@@ -238,9 +271,12 @@ object LyriconDataBridge : StateResetter {
         val foundLine = timingNavigator.lineAtOrPrevious(position)
         currentUnmergedLyricLine = unmergedTimingNavigator.lineAtOrPrevious(position)
 
+        val previewLine = earlyNextLinePreview(foundLine, position)
         val previousLine = currentLyricLine
         val previousInterlude = currentInterlude
-        val interlude = interludeTracker.evaluate(position, foundLine, previousInterlude)
+        val interlude = if (previewLine == null) {
+            interludeTracker.evaluate(position, foundLine, previousInterlude)
+        } else null
         currentInterlude = interlude
         currentInterludeType = interlude?.type
 
@@ -262,11 +298,11 @@ object LyriconDataBridge : StateResetter {
             }
         } else {
             currentInterludeLine = null
-            foundLine
+            previewLine ?: foundLine
         }
 
         currentLyricLine = displayLine
-        currentNextLyricLine = interlude?.next ?: foundLine?.next
+        currentNextLyricLine = interlude?.next ?: (previewLine ?: foundLine)?.next
         val newText = displayLine?.text ?: currentLyric ?: ""
         val changed = displayLine !== previousLine || newText != currentLyric
 
@@ -353,6 +389,11 @@ object LyriconDataBridge : StateResetter {
         currentUnmergedLyricLine = line
         currentNextLyricLine = preparedLine?.next
         currentLyric = currentLyricLine?.text
+        // Provider callbacks can repeat the still-singing line after the preview boundary.
+        // Resolve from the playback position again so a callback cannot undo the preview.
+        if (earlyNextLinePreviewMs != null && preparedLine != null) {
+            applyPosition(currentPosition)
+        }
         DisplayDiagnosticLogger.log(
             channel = "BRIDGE",
             result = "accepted",

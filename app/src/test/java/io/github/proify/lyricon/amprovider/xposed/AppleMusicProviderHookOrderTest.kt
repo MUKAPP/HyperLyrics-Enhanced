@@ -95,6 +95,8 @@ class AppleMusicProviderHookOrderTest {
             "hookInAppMetadata",
             "hookInAppPlaybackItemConversion",
             "hookInAppActionSheetMetadata",
+            "hookSettingsCellularDataEntry",
+            "hookCellularAvailability",
             "hookMediaSessionMetadata",
             "hookMediaSessionQueue",
             "hookPlaybackNotificationMetadata",

@@ -359,6 +359,19 @@ class HookEntry : XposedModule() {
         }
     }
 
+    private fun configureEarlyNextLinePreview() {
+        LyriconDataBridge.configureEarlyNextLinePreview(
+            prefs.getInt(
+                RootConstants.KEY_HOOK_EARLY_NEXT_LINE_PREVIEW,
+                RootConstants.DEFAULT_HOOK_EARLY_NEXT_LINE_PREVIEW,
+            ),
+            prefs.getInt(
+                RootConstants.KEY_HOOK_EARLY_NEXT_LINE_PREVIEW_CUSTOM_MS,
+                RootConstants.DEFAULT_HOOK_EARLY_NEXT_LINE_PREVIEW_CUSTOM_MS,
+            ),
+        )
+    }
+
     private fun initializeSystemEnvironment(app: Application) {
         try {
             cleanupRuntime()
@@ -370,6 +383,7 @@ class HookEntry : XposedModule() {
                 HookLogger.i("PrefsDiagnostics", message)
             }
 
+            configureEarlyNextLinePreview()
             val renderer = BaseIslandRenderer
             val sink = RootLyricSink(renderer, prefs)
 
@@ -532,8 +546,18 @@ class HookEntry : XposedModule() {
                     RootConstants.KEY_HOOK_CLASSIC_AOD_SONG_INFO_SHOW_ICON,
                     RootConstants.KEY_HOOK_CLASSIC_AOD_NEXT_SONG_PREVIEW,
                     RootConstants.KEY_HOOK_CLASSIC_AOD_NEXT_SONG_PREVIEW_POSITION,
+                    RootConstants.KEY_HOOK_EARLY_NEXT_LINE_PREVIEW,
+                    RootConstants.KEY_HOOK_EARLY_NEXT_LINE_PREVIEW_CUSTOM_MS,
                     RootConstants.KEY_HOOK_REMOVE_CJK_LYRIC_SPACES -> {
                         android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            if (key == RootConstants.KEY_HOOK_EARLY_NEXT_LINE_PREVIEW ||
+                                key == RootConstants.KEY_HOOK_EARLY_NEXT_LINE_PREVIEW_CUSTOM_MS
+                            ) {
+                                configureEarlyNextLinePreview()
+                                LyriconDataBridge.updateEstimatedPosition(
+                                    LyriconDataBridge.estimatedPosition() ?: LyriconDataBridge.currentPosition
+                                )
+                            }
                             ClassicAodFocusNotificationRecovery.ensureListenerCanRecover(app, prefs)
                             NotificationMediaAodLyricHooker.refresh()
                             BaseIslandRenderer.refreshActiveIsland()

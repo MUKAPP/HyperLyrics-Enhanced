@@ -112,6 +112,13 @@ object RootConstants {
         "key_hook_remove_cjk_lyric_spaces"
 
 
+    const val KEY_HOOK_EARLY_NEXT_LINE_PREVIEW = "key_hook_early_next_line_preview"
+    const val KEY_HOOK_EARLY_NEXT_LINE_PREVIEW_CUSTOM_MS =
+        "key_hook_early_next_line_preview_custom_ms"
+    const val DEFAULT_HOOK_EARLY_NEXT_LINE_PREVIEW = 0
+    const val EARLY_NEXT_LINE_PREVIEW_CUSTOM = 6
+    const val DEFAULT_HOOK_EARLY_NEXT_LINE_PREVIEW_CUSTOM_MS = 100
+
     const val KEY_HOOK_ISLAND_LEFT_ALBUM = "key_hook_island_left_album"
     const val KEY_HOOK_ISLAND_ALBUM_COVER_STYLE = "key_hook_island_album_cover_style"
     const val KEY_HOOK_ISLAND_ALBUM_COVER_STYLE_APP_WHITELIST =
