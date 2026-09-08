@@ -3182,7 +3182,9 @@ internal class AppleLyricsSupplementHooks(
 
     fun refreshAppleLyricsBlurEffect() = blurHooks.refreshAppleLyricsBlurEffect()
 
-    fun refreshAppleSystemFontWeight() = systemFontHooks.refreshAppleSystemFontWeight()
+    fun refreshAppleSystemFont() = systemFontHooks.refreshAppleSystemFont()
+
+    fun refreshAppleSystemFontWeight() = refreshAppleSystemFont()
 
     private fun scheduleAppleLyricsBlur(
         recyclerView: Any?,

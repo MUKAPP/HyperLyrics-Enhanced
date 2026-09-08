@@ -193,6 +193,14 @@ fun AppleMusicOptimizationPage(
         mutableIntStateOf(initialAdvancedLyricsBlurRadiusRange.second)
     }
     var showLyricsBlurValuesDialog by remember { mutableStateOf(false) }
+    var followSystemFont by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                RootConstants.KEY_HOOK_APPLE_MUSIC_FOLLOW_SYSTEM_FONT,
+                RootConstants.DEFAULT_HOOK_APPLE_MUSIC_FOLLOW_SYSTEM_FONT,
+            )
+        )
+    }
     var followSystemFontWeight by remember {
         mutableStateOf(
             prefs.getBoolean(
@@ -556,6 +564,22 @@ fun AppleMusicOptimizationPage(
                         },
                     )
                 }
+                SwitchPreference(
+                    title = stringResource(
+                        R.string.title_apple_music_follow_system_font
+                    ),
+                    summary = stringResource(
+                        R.string.summary_apple_music_follow_system_font
+                    ),
+                    checked = followSystemFont,
+                    onCheckedChange = { enabled ->
+                        followSystemFont = enabled
+                        saveConfig(
+                            RootConstants.KEY_HOOK_APPLE_MUSIC_FOLLOW_SYSTEM_FONT,
+                            enabled,
+                        )
+                    },
+                )
                 SwitchPreference(
                     title = stringResource(
                         R.string.title_apple_music_follow_system_font_weight
