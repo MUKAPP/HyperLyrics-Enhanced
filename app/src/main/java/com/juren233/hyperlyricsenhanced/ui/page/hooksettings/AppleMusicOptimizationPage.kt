@@ -1,6 +1,10 @@
 package com.juren233.hyperlyricsenhanced.ui.page.hooksettings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,6 +15,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -599,22 +604,28 @@ fun AppleMusicOptimizationPage(
                         )
                     },
                 )
-                SwitchPreference(
-                    title = stringResource(
-                        R.string.title_apple_music_follow_system_font_weight
-                    ),
-                    summary = stringResource(
-                        R.string.summary_apple_music_follow_system_font_weight
-                    ),
-                    checked = followSystemFontWeight,
-                    onCheckedChange = { enabled ->
-                        followSystemFontWeight = enabled
-                        saveConfig(
-                            RootConstants.KEY_HOOK_APPLE_MUSIC_FOLLOW_SYSTEM_FONT_WEIGHT,
-                            enabled,
-                        )
-                    },
-                )
+                AnimatedVisibility(
+                    visible = !followSystemFont,
+                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+                ) {
+                    SwitchPreference(
+                        title = stringResource(
+                            R.string.title_apple_music_follow_system_font_weight
+                        ),
+                        summary = stringResource(
+                            R.string.summary_apple_music_follow_system_font_weight
+                        ),
+                        checked = followSystemFontWeight,
+                        onCheckedChange = { enabled ->
+                            followSystemFontWeight = enabled
+                            saveConfig(
+                                RootConstants.KEY_HOOK_APPLE_MUSIC_FOLLOW_SYSTEM_FONT_WEIGHT,
+                                enabled,
+                            )
+                        },
+                    )
+                }
             }
         }
     }
