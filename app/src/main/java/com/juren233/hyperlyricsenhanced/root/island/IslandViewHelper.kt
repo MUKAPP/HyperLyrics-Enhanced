@@ -166,6 +166,37 @@ object IslandViewHelper {
         }
     }
 
+    /**
+     * 岛宽计算（calculateBigIslandWidth）以左右区在计算那一刻的 getMeasuredWidth()
+     * 为内容输入（手机插件 DEX：DynamicIslandContentView.calculateBigIslandWidth 直接
+     * 读取 area.measuredWidth），而该值是上一次布局的产物：回桌面恢复时岛从胶囊宽度
+     * 起步，区域被窄规格测量，计算读到窄值 → 岛按窄值定宽 → 窄状态自我维持，直到
+     * 一次强制刷新才跳回真实内容宽（真机：恢复后胶囊 546 停 3.5s 再跳 652，
+     * LyricHug 可见规格在 573/246 间交替）。
+     *
+     * 因此每次岛宽计算前把左右区以 AT_MOST(可用屏宽) 重新测量到内容自然宽度，
+     * 让计算输入不再依赖上一次布局宽度。高度沿用当前实测值，不扰动纵向布局。
+     */
+    fun measureIslandAreasToNaturalWidth(rootView: ViewGroup) {
+        runCatching {
+            val available = rootView.width.takeIf { it > 0 }
+                ?: rootView.resources.displayMetrics.widthPixels
+            val widthSpec = View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.AT_MOST)
+            listOfNotNull(
+                findViewByName(rootView, "area_left"),
+                findViewByName(rootView, "area_right"),
+            ).forEach { area ->
+                val heightSpec = View.MeasureSpec.makeMeasureSpec(
+                    area.measuredHeight.coerceAtLeast(1),
+                    View.MeasureSpec.EXACTLY,
+                )
+                area.measure(widthSpec, heightSpec)
+            }
+        }.onFailure { e ->
+            HookLogger.e("IslandViewHelper", "区域自然宽度预测量失败", e)
+        }
+    }
+
     internal fun isDynamicWidthEnabled(): Boolean {
         return HookEntry.instance?.prefs?.getBoolean(
             RootConstants.KEY_HOOK_ISLAND_DYNAMIC_WIDTH,
@@ -182,11 +213,13 @@ object IslandViewHelper {
 
     /**
      * 动态长度开启时，在宽度重算前标记左右区域子树强制重新测量，
-     * 覆盖 triggerSystemRelayout 与系统自发 calculateBigIslandWidth 两条路径。
+     * 覆盖 triggerSystemRelayout 与系统自发 calculateBigIslandWidth 两条路径；
+     * 并把区域预测量到内容自然宽度，保证宽度计算的输入不受上一次布局宽度污染。
      */
     fun forceLayoutIslandAreasIfDynamicWidth(rootView: ViewGroup) {
         if (isDynamicWidthEnabled()) {
             forceLayoutIslandAreas(rootView)
+            measureIslandAreasToNaturalWidth(rootView)
         }
     }
 
@@ -204,7 +237,7 @@ object IslandViewHelper {
                     it.name == "updateBigIslandViewWidth" || it.name == "calculateBigIslandWidth"
                 }
             ) {
-                triggerSystemRelayout(parent)
+                triggerLyricContentRelayout(parent)
                 return
             }
             parent = parent.parent
@@ -212,15 +245,41 @@ object IslandViewHelper {
     }
 
     /**
+     * 重算同一原生状态内的歌词内容宽度。
+     *
+     * 完整走 `updateBigIslandViewWidth()` 原生入口和 `UpdateDynamicIslandWidth`
+     * 事件。Hook 只把该请求产生的精确 `BigIslandChanged` 转场与歌词宽度关联，
+     * 让它不触发通用 Lottie 暂停/归零/恢复；宽度状态、布局与转场本身不变。
+     * 预测量不在关联作用域内，Hook 不可用时安全退化为完整原生行为。
+     */
+    fun triggerLyricContentRelayout(islandView: ViewGroup) {
+        triggerRelayout(islandView, protectLyricLottie = true)
+    }
+
+    /**
      * 触发超级岛系统的布局刷新
      *
      * 使用 ThreadLocal 防止重入：triggerSystemRelayout 调用的系统方法可能被
      * Hook 拦截后再次触发 triggerSystemRelayout，导致无限递归。
+     *
+     * `updateBigIslandViewWidth` 会先计算宽度，再用 `UpdateDynamicIslandWidth`
+     * 驱动 `BigIslandChanged` 提交布局/状态。真机已确认两段都承重：不得绕过、
+     * 吞掉或手工替代事件路径，否则会破坏可见伸缩或状态时序。
      */
     fun triggerSystemRelayout(islandView: ViewGroup) {
+        triggerRelayout(islandView, protectLyricLottie = false)
+    }
+
+    private fun triggerRelayout(
+        islandView: ViewGroup,
+        protectLyricLottie: Boolean,
+    ) {
         if (isRelayouting.get() == true) return
         if (BuildConfig.DEBUG) {
-            IslandBackgroundTraceDiagnostics.event("模块主动布局刷新", islandView)
+            IslandBackgroundTraceDiagnostics.event(
+                if (protectLyricLottie) "模块歌词宽度刷新" else "模块主动布局刷新",
+                islandView,
+            )
         }
         HookLogger.d("IslandViewHelper","正在触发布局刷新")
         isRelayouting.set(true)
@@ -231,7 +290,13 @@ object IslandViewHelper {
                 // 优先尝试 updateBigIslandViewWidth
                 val updateWidthMethod = viewClass.methods.find { it.name == "updateBigIslandViewWidth" }
                 if (updateWidthMethod != null) {
-                    updateWidthMethod.invoke(islandView)
+                    if (protectLyricLottie) {
+                        IslandWidthEventRebindGuard.aroundLyricWidthRelayout(islandView) {
+                            updateWidthMethod.invoke(islandView)
+                        }
+                    } else {
+                        updateWidthMethod.invoke(islandView)
+                    }
                 } else {
                     // 兜底尝试 calculateBigIslandWidth
                     viewClass.methods.find { it.name == "calculateBigIslandWidth" }?.invoke(islandView)

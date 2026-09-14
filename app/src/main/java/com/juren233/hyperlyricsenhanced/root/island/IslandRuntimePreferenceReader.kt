@@ -7,6 +7,7 @@
 package com.juren233.hyperlyricsenhanced.root.island
 
 import android.content.SharedPreferences
+import com.juren233.hyperlyricsenhanced.common.IslandMusicWaveColorMode
 import com.juren233.hyperlyricsenhanced.common.IslandProgressColorMode
 import com.juren233.hyperlyricsenhanced.common.RootConstants
 
@@ -59,6 +60,33 @@ internal object IslandRuntimePreferenceReader {
             prefs,
             RootConstants.KEY_HOOK_ISLAND_PROGRESS_GRADIENT,
             RootConstants.DEFAULT_HOOK_ISLAND_PROGRESS_GRADIENT,
+        ),
+    )
+
+    fun contains(
+        prefs: SharedPreferences,
+        key: String,
+    ): Boolean = IslandRuntimePreferenceOverrides.contains(key) || prefs.contains(key)
+
+    fun getMusicWaveColorMode(prefs: SharedPreferences): Int = IslandMusicWaveColorMode.resolve(
+        storedMode = getInt(
+            prefs,
+            RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR_MODE,
+            IslandMusicWaveColorMode.UNSPECIFIED,
+        ),
+        hasLegacyCoverPreference = contains(
+            prefs,
+            RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR,
+        ),
+        legacyCoverEnabled = getBoolean(
+            prefs,
+            RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR,
+            RootConstants.DEFAULT_HOOK_ISLAND_MUSIC_WAVE_COLOR,
+        ),
+        legacyCoverGradient = getBoolean(
+            prefs,
+            RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_GRADIENT,
+            RootConstants.DEFAULT_HOOK_ISLAND_MUSIC_WAVE_GRADIENT,
         ),
     )
 }

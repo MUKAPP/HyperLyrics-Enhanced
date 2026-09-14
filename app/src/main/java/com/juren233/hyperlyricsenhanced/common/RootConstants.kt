@@ -131,7 +131,9 @@ object RootConstants {
     const val KEY_HOOK_ISLAND_RIGHT_PADDING_RIGHT = "key_hook_island_right_padding_right"
     const val KEY_HOOK_ISLAND_LEFT_CONTENT_MAX_WIDTH = "key_hook_island_left_content_max_width"
     const val KEY_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH = "key_hook_island_right_content_max_width"
+    const val KEY_HOOK_ISLAND_DYNAMIC_LIMIT = "key_hook_island_dynamic_limit"
     const val KEY_HOOK_ISLAND_DYNAMIC_WIDTH = "key_hook_island_dynamic_width"
+    const val KEY_HOOK_ISLAND_DUET_FIXED_LENGTH = "key_hook_island_duet_fixed_length"
     const val KEY_HOOK_ISLAND_BEHAVIOR_AFTER_PAUSE = "key_hook_island_behavior_after_pause"
     const val KEY_HOOK_ISLAND_FORCE_NEXT_SONG_AT_END = "key_hook_island_force_next_song_at_end"
     const val KEY_HOOK_ISLAND_NEXT_SONG_DURATION = "key_hook_island_next_song_duration"
@@ -204,6 +206,7 @@ object RootConstants {
     const val KEY_HOOK_ISLAND_RIGHT_ICON = "key_hook_island_right_icon"
     const val KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR = "key_hook_island_music_wave_color"
     const val KEY_HOOK_ISLAND_MUSIC_WAVE_GRADIENT = "key_hook_island_music_wave_gradient"
+    const val KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR_MODE = "key_hook_island_music_wave_color_mode"
 
     // ================= ANIMATION & MARQUEE KEYS =================
     const val KEY_HOOK_ANIM_MODE = "key_hook_anim_mode"
@@ -457,7 +460,9 @@ object RootConstants {
     const val DEFAULT_HOOK_ISLAND_RIGHT_PADDING_RIGHT = 0
     const val DEFAULT_HOOK_ISLAND_LEFT_CONTENT_MAX_WIDTH = 80
     const val DEFAULT_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH = 100
+    const val DEFAULT_HOOK_ISLAND_DYNAMIC_LIMIT = false
     const val DEFAULT_HOOK_ISLAND_DYNAMIC_WIDTH = false
+    const val DEFAULT_HOOK_ISLAND_DUET_FIXED_LENGTH = false
     const val DEFAULT_HOOK_ISLAND_BEHAVIOR_AFTER_PAUSE = 0
     const val DEFAULT_HOOK_ISLAND_FORCE_NEXT_SONG_AT_END = false
     const val DEFAULT_HOOK_ISLAND_NEXT_SONG_DURATION = 4
@@ -555,6 +560,10 @@ object RootConstants {
     const val DEFAULT_HOOK_ISLAND_RIGHT_ICON = false
     const val DEFAULT_HOOK_ISLAND_MUSIC_WAVE_COLOR = false
     const val DEFAULT_HOOK_ISLAND_MUSIC_WAVE_GRADIENT = false
+    const val ISLAND_MUSIC_WAVE_COLOR_MODE_DISABLED = 0
+    const val ISLAND_MUSIC_WAVE_COLOR_MODE_COVER = 1
+    const val ISLAND_MUSIC_WAVE_COLOR_MODE_COVER_GRADIENT = 2
+    const val DEFAULT_HOOK_ISLAND_MUSIC_WAVE_COLOR_MODE = ISLAND_MUSIC_WAVE_COLOR_MODE_COVER
 
     const val DEFAULT_HOOK_ANIM_ENABLE = false
     const val DEFAULT_HOOK_ANIM_ID = "yoyo_default"

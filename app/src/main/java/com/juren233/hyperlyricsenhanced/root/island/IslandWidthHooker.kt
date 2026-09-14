@@ -2,6 +2,7 @@ package com.juren233.hyperlyricsenhanced.root.island
 
 import android.view.ViewGroup
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import com.juren233.hyperlyricsenhanced.lyric.view.LyricHugMeasureWindow
 import com.juren233.hyperlyricsenhanced.root.island.IslandTextHookerSupport.TAG
 import com.juren233.hyperlyricsenhanced.root.island.IslandTextHookerSupport.findFieldValue
 import com.juren233.hyperlyricsenhanced.root.utils.HookLogger
@@ -34,6 +35,9 @@ internal object IslandWidthHooker {
                 if (!IslandProbeUtils.isSuperIslandEnabled()) return@runCatching
                 val contentView = chain.thisObject as? ViewGroup ?: return@runCatching
                 hookedContentView = contentView
+                // 所有宽度计算路径（含系统自发调用、非歌词态）都必须提供内容视图，
+                // 否则动态上限在窗口外会直接放行未截断结果，出现超长岛。
+                IslandDynamicWidthLimiter.calculatingContent = contentView
                 previousIslandWidth = IslandPadContentAnchor.currentIslandWidth(contentView)
                 val currentData = IslandProbeUtils.getCurrentIslandData(contentView)
                 val mediaInfo = IslandProbeUtils.extractMediaIslandInfo(currentData) ?: return@runCatching
@@ -65,19 +69,31 @@ internal object IslandWidthHooker {
             HookLogger.e(TAG, "计算大岛宽度前准备歌词视图失败", e)
             }
 
-            val result = chain.proceed()
-            lyricWidthCalculationActive = false
-            if (lyricIslandCalculation && padIslandPathActive) hookedContentView?.let { view ->
+            val result = try {
+                LyricHugMeasureWindow.reportIntrinsicWidth = true
+                chain.proceed()
+            } finally {
+                LyricHugMeasureWindow.reportIntrinsicWidth = false
+                lyricWidthCalculationActive = false
+                IslandDynamicWidthLimiter.calculatingContent = null
+            }
+            // 岛宽本身发生实际变化时，状态栏会围绕动画中的岛宽重新排布；记录过渡窗口，
+            // 让动态上限不再把这些自激布局变化当作新的状态栏内容去触发第 N 次刷新。
+            val currentIslandWidth = hookedContentView
+                ?.let { IslandPadContentAnchor.currentIslandWidth(it) }
+                ?: -1
+            val islandWidthChanged = previousIslandWidth > 0 &&
+                currentIslandWidth > 0 &&
+                currentIslandWidth != previousIslandWidth
+            if (islandWidthChanged) {
+                IslandDynamicWidthLimiter.onIslandWidthChanged()
+            }
+            if (lyricIslandCalculation && padIslandPathActive && islandWidthChanged) hookedContentView?.let { view ->
                 // 歌词岛宽度变化（原生 Rule 1/2 或本模块改写 Rule 3）都会让平板居中布局的
                 // 内容先跳 (W_target - W(t)) / 2 再滑回，这里统一开启内容左缘锚定窗口。
                 runCatching {
-                    val currentWidth = IslandPadContentAnchor.currentIslandWidth(view)
-                    if (IslandViewHelper.isUnlockIslandLengthEnabled() &&
-                        previousIslandWidth > 0 &&
-                        currentWidth > 0 &&
-                        currentWidth != previousIslandWidth
-                    ) {
-                        IslandPadContentAnchor.onWidthRewritten(view, currentWidth)
+                    if (IslandViewHelper.isUnlockIslandLengthEnabled() || IslandDynamicWidthLimiter.isEnabled()) {
+                        IslandPadContentAnchor.onWidthRewritten(view, currentIslandWidth)
                     }
                 }.onFailure { HookLogger.e(TAG, "开启平板岛内容锚定失败", it) }
             }
@@ -213,7 +229,14 @@ internal object IslandWidthHooker {
 
         override fun intercept(chain: Chain): Any? {
             val result = chain.proceed()
-            return runCatching {
+            val candidate = runCatching {
+                if (IslandDynamicWidthLimiter.isEnabled()) {
+                    if (lastLoggedState != 2) {
+                        lastLoggedState = 2
+                        HookLogger.i(TAG, "动态上限已启用，平板自定义长度保持停用")
+                    }
+                    return@runCatching result
+                }
                 if (!IslandViewHelper.isUnlockIslandLengthEnabled()) {
                     if (lastLoggedState != 0) {
                         lastLoggedState = 0
@@ -255,6 +278,7 @@ internal object IslandWidthHooker {
                 }
                 swapped
             }.getOrDefault(result)
+            return IslandDynamicWidthLimiter.apply(result, candidate, chain.args.getOrNull(0), pad = true, helper = chain.thisObject)
         }
 
         private fun Any.intGetter(suffix: String): Int? = runCatching {
@@ -292,7 +316,14 @@ internal object IslandWidthHooker {
 
         override fun intercept(chain: Chain): Any? {
             val result = chain.proceed()
-            return runCatching {
+            val candidate = runCatching {
+                if (IslandDynamicWidthLimiter.isEnabled()) {
+                    if (lastLoggedState != 2) {
+                        lastLoggedState = 2
+                        HookLogger.i(TAG, "动态上限已启用，手机自定义长度保持停用")
+                    }
+                    return@runCatching result
+                }
                 if (!IslandViewHelper.isUnlockIslandLengthEnabled()) {
                     if (lastLoggedState != 0) {
                         lastLoggedState = 0
@@ -336,6 +367,7 @@ internal object IslandWidthHooker {
                 }
                 swapped
             }.getOrDefault(result)
+            return IslandDynamicWidthLimiter.apply(result, candidate, chain.args.getOrNull(0), pad = false, helper = chain.thisObject)
         }
 
         private fun isFlipTiny(helper: Any?): Boolean = runCatching {

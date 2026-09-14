@@ -51,6 +51,8 @@ import com.juren233.hyperlyricsenhanced.provider.OfficialProviderUiState
 import com.juren233.hyperlyricsenhanced.root.RootApplication
 import com.juren233.hyperlyricsenhanced.ui.component.EnhancedVersionNotice
 import com.juren233.hyperlyricsenhanced.ui.component.ProComponent
+import com.juren233.hyperlyricsenhanced.ui.page.hooksettings.localizeProviderError
+import com.juren233.hyperlyricsenhanced.ui.page.hooksettings.rememberProviderErrorTexts
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -386,6 +388,8 @@ fun LyricSourceSelectionPage(
     val coroutineScope = rememberCoroutineScope()
     val providerStateFlow = remember { MutableStateFlow(OfficialProviderUiState()) }
     val providerState = providerStateFlow.collectAsState()
+    val providerErrorTexts = rememberProviderErrorTexts()
+    val unknownErrorText = stringResource(R.string.unknown)
     val sourceOptions = listOf(
         stringResource(R.string.lyric_source_lyricon),
         stringResource(R.string.lyric_source_superlyric),
@@ -555,7 +559,11 @@ fun LyricSourceSelectionPage(
                 providerState.value.error != null -> item(key = "setup_provider_error") {
                     SetupProviderStateCard(
                         title = stringResource(R.string.provider_catalog_load_failed),
-                        summary = providerState.value.error,
+                        summary = localizeProviderError(
+                            providerState.value.error,
+                            providerErrorTexts,
+                            unknownErrorText,
+                        ),
                         actionText = stringResource(R.string.setup_provider_retry),
                         onClick = {
                             coroutineScope.launch {

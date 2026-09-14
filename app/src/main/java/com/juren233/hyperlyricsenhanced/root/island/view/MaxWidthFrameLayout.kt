@@ -30,7 +30,10 @@ class MaxWidthFrameLayout(context: Context) : FrameLayout(context) {
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val givenWidth = MeasureSpec.getSize(widthMeasureSpec)
-        val newWidth = if (maxWidthPx > 0 && (givenWidth == 0 || givenWidth > maxWidthPx)) maxWidthPx else givenWidth
+        // AT_MOST 0 is a real limit (for example no room beside status-bar icons).
+        // Only UNSPECIFIED means that the parent did not provide a width bound.
+        val unbounded = MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED
+        val newWidth = if (maxWidthPx > 0 && (unbounded || givenWidth > maxWidthPx)) maxWidthPx else givenWidth
         super.onMeasure(MeasureSpec.makeMeasureSpec(newWidth, MeasureSpec.AT_MOST), heightMeasureSpec)
         if (maxWidthPx > 0 && measuredWidth > maxWidthPx) {
             setMeasuredDimension(maxWidthPx, measuredHeight)

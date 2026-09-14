@@ -95,6 +95,16 @@ internal fun IslandSlotContentAssembler.hasLineContentChanged(
     targetLine: IRichLyricLine?
 ): Boolean = lineContentSignature(currentLine) != lineContentSignature(targetLine)
 
+/** 读取槽视图的实际绑定状态，交由 [isLyricViewContentLostState] 判定内容是否已丢失。 */
+internal fun IslandSlotContentAssembler.isLyricViewContentLost(view: View, targetLine: IRichLyricLine?): Boolean {
+    val boundState = when (view) {
+        is RichLyricLineView -> view.rawLine to view.main.lineWidth
+        is SpaceGateRichLyricLineView -> view.rawLine to view.main.lineWidth
+        else -> return false
+    }
+    return isLyricViewContentLostState(targetLine, boundState.first, boundState.second)
+}
+
 internal fun IslandSlotContentAssembler.isEmptyToPopulatedLyricTransition(
     currentLine: IRichLyricLine?,
     targetLine: IRichLyricLine?

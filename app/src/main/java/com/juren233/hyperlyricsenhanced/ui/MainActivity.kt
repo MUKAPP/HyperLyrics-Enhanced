@@ -11,6 +11,7 @@ import com.juren233.hyperlyricsenhanced.BuildConfig
 import com.juren233.hyperlyricsenhanced.common.UIConstants
 import com.juren233.hyperlyricsenhanced.ui.navigation.AppNavigation
 import com.juren233.hyperlyricsenhanced.ui.navigation.Route
+import com.juren233.hyperlyricsenhanced.ui.utils.AppUtils
 import com.juren233.hyperlyricsenhanced.ui.utils.LocaleUtils
 import com.juren233.hyperlyricsenhanced.ui.utils.ThemeUtils
 import com.juren233.hyperlyricsenhanced.utils.UpdateData
@@ -48,6 +49,9 @@ class MainActivity : ComponentActivity() {
                 am.appTasks?.forEach { it.setExcludeFromRecents(true) }
             } catch (_: Exception) { }
         }
+
+        // 隐藏图标状态持久保存在 PackageManager，这里按偏好收敛一次（如备份恢复后的漂移）
+        AppUtils.applyLauncherIconVisibility(this, prefs.getBoolean(UIConstants.KEY_HIDE_APP_ICON, UIConstants.DEFAULT_HIDE_APP_ICON))
 
         enableEdgeToEdge()
         window.isNavigationBarContrastEnforced = false

@@ -13,6 +13,8 @@ object UIConstants {
     const val KEY_FLOATING_NAV_BAR = "key_floating_nav_bar"
     const val KEY_PARALLEL_WINDOW_UI = "key_parallel_window_ui"
     const val KEY_EXCLUDE_FROM_RECENTS = "key_exclude_from_recents"
+    const val KEY_HIDE_APP_ICON = "key_hide_app_icon"
+    const val KEY_SHOW_SETTINGS_ENTRY = "key_show_settings_entry"
     const val KEY_LOG_LEVEL = "key_log_level"
     const val KEY_LOG_LEVEL_BUILD_KIND = "key_log_level_build_kind"
     const val KEY_LAST_SEEN_VERSION = "key_last_seen_version"
@@ -27,5 +29,7 @@ object UIConstants {
     const val DEFAULT_FLOATING_NAV_BAR = false
     const val DEFAULT_PARALLEL_WINDOW_UI = true
     const val DEFAULT_EXCLUDE_FROM_RECENTS = false
+    const val DEFAULT_HIDE_APP_ICON = false
+    const val DEFAULT_SHOW_SETTINGS_ENTRY = true
     const val DEFAULT_LOG_LEVEL = LogLevelPolicy.LEVEL_NORMAL // Legacy fallback only.
 }

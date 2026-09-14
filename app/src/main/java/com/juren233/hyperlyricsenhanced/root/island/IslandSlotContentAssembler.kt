@@ -20,6 +20,7 @@ import com.juren233.hyperlyricsenhanced.lyric.view.METADATA_NEXT_LINE_PREVIEW_AL
 import com.juren233.hyperlyricsenhanced.lyric.view.METADATA_NEXT_LINE_PREVIEW_CENTERED
 import com.juren233.hyperlyricsenhanced.lyric.view.RichLyricLineView
 import com.juren233.hyperlyricsenhanced.lyric.view.SpaceGateRichLyricLineView
+import com.juren233.hyperlyricsenhanced.root.island.view.MaxWidthFrameLayout
 import com.juren233.hyperlyricsenhanced.lyric.view.LyricViewStyle
 import com.juren233.hyperlyricsenhanced.lyric.view.isTitleLine
 import com.juren233.hyperlyricsenhanced.lyric.view.yoyo.YoYoPresets
@@ -364,7 +365,8 @@ internal object IslandSlotContentAssembler {
         force: Boolean,
         lastSignature: String?,
         targetSignature: String,
-    ): Boolean = !force && lastSignature == targetSignature
+        viewContentLost: Boolean = false,
+    ): Boolean = !force && !viewContentLost && lastSignature == targetSignature
 
     private fun applyNextSongPreviewLine(
         view: View,
@@ -383,7 +385,8 @@ internal object IslandSlotContentAssembler {
             config.styleSignature
         ).joinToString("|")
         val contentChanged = hasViewLineContentChanged(view, line)
-        if (shouldSkipContentRefresh(false, lastContentSignatures[view], signature)) return false
+        val viewContentLost = isLyricViewContentLost(view, line)
+        if (shouldSkipContentRefresh(false, lastContentSignatures[view], signature, viewContentLost)) return false
 
         applyContentUpdate(view, config, contentChanged = contentChanged) { target ->
             val isLeft = view.tag == IslandProbeUtils.LEFT_TEST_VIEW_TAG
@@ -497,7 +500,9 @@ internal object IslandSlotContentAssembler {
         if (rawLine.text.isNullOrEmpty()) return rawLine
 
         val density = view.resources.displayMetrics.density
-        val leftMaxPx = config.leftMaxWidthDp * density
+        val leftMaxPx = config.contentWidthPx(
+            view.resources.displayMetrics.widthPixels, density, isLeft = true
+        )?.toFloat() ?: 0f
         val centerCurrentLine = shouldCenterLine(config, rawLine, isLeft)
         val textPaint = TextPaint().apply {
             textSize = config.textSizeSp.toFloat() * density
@@ -621,13 +626,20 @@ internal object IslandSlotContentAssembler {
         val signature = "lyric|${lineContentSignature(targetLine)}|${config.styleSignature}"
         val contentChanged = hasViewLineContentChanged(view, targetLine)
         val lyricsJustBecameAvailable = recordLyricAvailability(view, targetLine)
-        if (shouldSkipContentRefresh(force, lastContentSignatures[view], signature)) {
-            applyLineCentering(view, centerCurrentLine, centerSecondaryLine)
-            applyLineRightAlignment(
-                view,
-                alignMainRight = config.rightAlignLyric(isLeft) && !centerCurrentLine,
-                alignSecondaryRight = config.rightAlignLyric(isLeft) && !centerSecondaryLine
-            )
+        val viewContentLost = isLyricViewContentLost(view, targetLine)
+        if (shouldSkipContentRefresh(force, lastContentSignatures[view], signature, viewContentLost)) {
+            // The target signature is recorded when its exit animation starts, while the
+            // View still draws the previous line until the animation callback. A position or
+            // width refresh in that window must not put the target line's alignment on the
+            // old text. The callback below applies alignment and content together at alpha 0.
+            if (!contentChanged) {
+                applyLineCentering(view, centerCurrentLine, centerSecondaryLine)
+                applyLineRightAlignment(
+                    view,
+                    alignMainRight = config.rightAlignLyric(isLeft) && !centerCurrentLine,
+                    alignSecondaryRight = config.rightAlignLyric(isLeft) && !centerSecondaryLine
+                )
+            }
             applyPlaybackActive(view, playbackActive)
             return false
         }
@@ -651,6 +663,7 @@ internal object IslandSlotContentAssembler {
                     if (config.lyricMarqueeEnabled) target.post { target.requestStartMarquee() }
                 }
             }
+            IslandLyricTextInjector.syncDuetGravityAfterContentLanding(target, config)
         }
 
         val willAnimateNextLinePromotion = when (view) {
@@ -717,7 +730,8 @@ internal object IslandSlotContentAssembler {
         ).joinToString("|")
         val newLine = buildMetadataLine(mode, songName, artistName, albumName)
         val contentChanged = hasViewLineContentChanged(view, newLine)
-        if (shouldSkipContentRefresh(force, lastContentSignatures[view], signature)) return false
+        val viewContentLost = isLyricViewContentLost(view, newLine)
+        if (shouldSkipContentRefresh(force, lastContentSignatures[view], signature, viewContentLost)) return false
 
         applyContentUpdate(view, config, suppressAnimation, contentChanged) { target ->
             val isLeft = view.tag == IslandProbeUtils.LEFT_TEST_VIEW_TAG
@@ -725,11 +739,11 @@ internal object IslandSlotContentAssembler {
             applyLineRightAlignment(target, config.rightAlignLyric(isLeft))
             when (target) {
                 is RichLyricLineView -> {
-                    if (contentChanged) target.line = newLine
+                    if (contentChanged || viewContentLost) target.line = newLine
                     applyMetadataMarquee(target, config)
                 }
                 is SpaceGateRichLyricLineView -> {
-                    if (contentChanged) target.line = newLine
+                    if (contentChanged || viewContentLost) target.line = newLine
                     applyMetadataMarquee(target, config)
                 }
             }
@@ -810,11 +824,15 @@ internal object IslandSlotContentAssembler {
             is RichLyricLineView -> if (entranceOnly) {
                 view.animateEntrance(preset) { update(this) }
             } else {
+                // 动态长度：淡出期间冻结组宽，旧句对唱位置保持到新内容落地，
+                // 避免“旧句先移到另一侧再换字”。
+                view.beginContentSwitchFreeze()
                 view.animateUpdate(preset) { animatedUpdate(this) }
             }
             is SpaceGateRichLyricLineView -> if (entranceOnly) {
                 view.animateEntrance(preset) { update(this) }
             } else {
+                view.beginContentSwitchFreeze()
                 view.animateUpdate(preset) { animatedUpdate(this) }
             }
             else -> update(view)
@@ -855,6 +873,12 @@ internal object IslandSlotContentAssembler {
             translationOnly = TranslationHelper.isTranslationOnly(prefs),
             nextLinePreview = isNextLinePreviewEnabled(prefs, config)
         )
+        // 对唱固定长度：仅在动态长度开启时消费开关；歌曲含对唱行才抬宽到全曲最长行。
+        val duetSongLyrics = if (config.dynamicWidthEnabled && config.duetFixedLengthEnabled) {
+            LyriconDataBridge.currentSong?.lyrics
+        } else {
+            null
+        }
         when (view) {
             is RichLyricLineView -> {
                 view.setDisplayOptions(
@@ -863,6 +887,7 @@ internal object IslandSlotContentAssembler {
                     options.hideSecondaryContent
                 )
                 view.hugContentWidth = config.dynamicWidthEnabled
+                view.applyDuetFixedLength(duetSongLyrics, duetWidthCapOf(view))
                 view.onDeferredContentApplied = {
                     IslandViewHelper.triggerSystemRelayoutForDescendant(view)
                 }
@@ -874,12 +899,20 @@ internal object IslandSlotContentAssembler {
                     options.hideSecondaryContent
                 )
                 view.hugContentWidth = config.dynamicWidthEnabled
+                view.applyDuetFixedLength(duetSongLyrics, duetWidthCapOf(view))
                 view.onDeferredContentApplied = {
                     IslandViewHelper.triggerSystemRelayoutForDescendant(view)
                 }
             }
         }
     }
+
+    /**
+     * 对唱固定长度的宽度上限：所在注入 wrapper 的内容最大宽度。
+     * 视图尚未挂到 wrapper（首次注入）时为 null，此时不截断。
+     */
+    private fun duetWidthCapOf(view: View): Int? =
+        (view.parent as? MaxWidthFrameLayout)?.maxWidthPx?.takeIf { it > 0 }
 
     internal fun resolveLyricDisplayOptions(
         translationDisplayMode: Int,

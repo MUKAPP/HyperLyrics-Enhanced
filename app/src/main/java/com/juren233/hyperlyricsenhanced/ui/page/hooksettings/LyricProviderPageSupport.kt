@@ -589,10 +589,15 @@ internal data class ProviderErrorTexts(
     val network: String,
     val http: String,
     val catalogSignature: String,
+    val catalogVersion: String,
+    val catalogDuplicate: String,
+    val catalogTarget: String,
+    val catalogUrl: String,
     val catalogData: String,
     val unavailable: String,
     val integrity: String,
     val incompatible: String,
+    val unsupportedTarget: String,
     val storage: String,
     val generic: String,
 )
@@ -602,12 +607,25 @@ internal fun rememberProviderErrorTexts() = ProviderErrorTexts(
     network = stringResource(R.string.provider_error_network),
     http = stringResource(R.string.provider_error_http),
     catalogSignature = stringResource(R.string.provider_error_catalog_signature),
+    catalogVersion = stringResource(R.string.provider_error_catalog_version),
+    catalogDuplicate = stringResource(R.string.provider_error_catalog_duplicate),
+    catalogTarget = stringResource(R.string.provider_error_catalog_target),
+    catalogUrl = stringResource(R.string.provider_error_catalog_url),
     catalogData = stringResource(R.string.provider_error_catalog_data),
     unavailable = stringResource(R.string.provider_error_unavailable),
     integrity = stringResource(R.string.provider_error_integrity),
     incompatible = stringResource(R.string.provider_error_incompatible),
+    unsupportedTarget = stringResource(R.string.provider_error_unsupported_target),
     storage = stringResource(R.string.provider_error_storage),
     generic = stringResource(R.string.provider_error_generic),
+)
+
+// 旧版 App 遇到目录新增/变更内容时的原始消息：归因是 App 版本过旧，必须引导更新
+// App 而不是让用户"等待项目仓库修复"。必须精确匹配原始消息，防止误伤其他目录错误。
+private val CATALOG_VERSION_ERRORS = setOf(
+    "Provider 目录包含未知插件",
+    "Provider 目录与内置允许列表不一致",
+    "Provider 目录格式不兼容",
 )
 
 internal fun localizeProviderError(
@@ -622,8 +640,15 @@ internal fun localizeProviderError(
     val lowerMessage = message.lowercase()
     return when {
         "http " in lowerMessage -> {
-            val status = message.substringAfter("HTTP ", unknownText).substringBefore(' ')
-            texts.http.replace("%1\$s", status)
+            val status = message.substringAfter("HTTP ", unknownText)
+                .substringBefore(' ')
+                .ifEmpty { unknownText }
+            val host = message.substringAfterLast(" (", "")
+                .removeSuffix(")")
+                .takeIf { candidate -> candidate.isNotEmpty() && !candidate.contains(' ') }
+            texts.http
+                .replace("%1\$s", status)
+                .replace("%2\$s", host ?: unknownText)
         }
         listOf(
             "unable to resolve host",
@@ -633,11 +658,20 @@ internal fun localizeProviderError(
             "timeout",
             "timed out",
             "socket",
+            "ssl",
+            "handshake",
+            "certificate",
+            "prematurely closed",
+            "unexpected end of stream",
+            "connection abort",
         ).any(lowerMessage::contains) -> texts.network
         "目录签名" in message -> texts.catalogSignature
+        message in CATALOG_VERSION_ERRORS -> texts.catalogVersion
+        "Provider 目录包含重复插件" in message -> texts.catalogDuplicate
+        "Provider 目录目标包名无效" in message -> texts.catalogTarget
+        "下载地址" in message -> texts.catalogUrl
         "Provider 目录" in message ||
-            "插件目录" in message ||
-            "下载地址" in message -> texts.catalogData
+            "插件目录" in message -> texts.catalogData
         "尚未发布" in message -> texts.unavailable
         "写入" in message ||
             "原子替换" in message ||
@@ -647,6 +681,8 @@ internal fun localizeProviderError(
             "需要更新版本" in message ||
             "不支持的 Provider Pack 格式" in message ||
             "插件 API" in message -> texts.incompatible
+        "不支持当前音乐软件" in message ||
+            "与当前音乐软件不匹配" in message -> texts.unsupportedTarget
         "摘要" in message ||
             "签名无效" in message ||
             "校验" in message ||

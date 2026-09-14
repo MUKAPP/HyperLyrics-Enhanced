@@ -32,6 +32,7 @@ import com.juren233.hyperlyricsenhanced.root.island.renderer.BaseIslandRenderer
 import com.juren233.hyperlyricsenhanced.root.lyricon.central.EmbeddedLyriconCentralController
 import com.juren233.hyperlyricsenhanced.root.lyricon.provider.LyriconProviderControlFrameBridge
 import com.juren233.hyperlyricsenhanced.root.salt.SaltPlayerNextTrackHooker
+import com.juren233.hyperlyricsenhanced.root.settings.SettingsEntryHooker
 import com.juren233.hyperlyricsenhanced.root.source.LyriconSource
 import com.juren233.hyperlyricsenhanced.root.source.onActiveMediaSessionSnapshotChanged
 import com.juren233.hyperlyricsenhanced.root.source.onPreferenceChanged
@@ -174,6 +175,12 @@ class HookEntry : XposedModule() {
         }.getOrNull()
     }
 
+    internal fun moduleApkSourceDir(): String? =
+        runCatching { moduleApplicationInfo.sourceDir }.getOrNull()
+
+    /** 宿主（如 SystemUI）进程的 Application 上下文，供需要宿主身份的媒体/视图查询使用。 */
+    internal fun runtimeAppContext(): Context? = runtimeApp
+
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         super.onModuleLoaded(param)
         instance = this
@@ -251,7 +258,10 @@ class HookEntry : XposedModule() {
         // 普通目标仍只在主进程注入；官方 Provider 可精确声明必要的播放子进程。
         if (!OfficialProviderCatalog.shouldLoadIntoProcess(packageName, processName)) return
 
-        if (packageName != "com.android.systemui" && packageName != "miui.systemui.plugin") {
+        // 设置进程只需要首页入口注入，不装 Lyricon 控制帧重连通道。
+        if (packageName != "com.android.systemui" && packageName != "miui.systemui.plugin" &&
+            packageName != "com.android.settings"
+        ) {
             runCatching {
                 LyriconProviderControlFrameBridge.install(
                     module = this,
@@ -288,6 +298,8 @@ class HookEntry : XposedModule() {
                      HookLogger.e("HookEntry", "焦点通知白名单注入失败", e)
                  }
             }
+
+            com.juren233.hyperlyricsenhanced.root.island.IslandStatusBarSpaceMonitor.install(this, param.defaultClassLoader)
 
             val isSuperIslandEnabled = SystemUiEnhancementGate.isEnabled()
             
@@ -358,6 +370,8 @@ class HookEntry : XposedModule() {
                 packageName = packageName,
                 processName = processName,
             )
+        } else if (packageName == "com.android.settings") {
+            SettingsEntryHooker.install(this, param.defaultClassLoader)
         } else {
             OfficialProviderRuntime.installIfAvailable(
                 module = this,
@@ -581,9 +595,10 @@ class HookEntry : XposedModule() {
                         }
                     }
                     RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR,
-                    RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_GRADIENT -> {
+                    RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_GRADIENT,
+                    RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR_MODE -> {
                         android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            IslandAlbumCoverStyleHooker.refresh()
+                            // 律动颜色与封面样式无关；连带刷新会重走 setFixIcon 重绘封面，造成封面闪烁
                             IslandMusicWaveColorHooker.refresh()
                         }
                     }
@@ -647,7 +662,9 @@ class HookEntry : XposedModule() {
                             IslandExpandedMediaAmbientFlowHooker.refreshMediaElements()
                         }
                     }
-                    RootConstants.KEY_HOOK_ISLAND_DYNAMIC_WIDTH -> {
+                    RootConstants.KEY_HOOK_ISLAND_DYNAMIC_LIMIT,
+                    RootConstants.KEY_HOOK_ISLAND_DYNAMIC_WIDTH,
+                    RootConstants.KEY_HOOK_ISLAND_DUET_FIXED_LENGTH -> {
                         android.os.Handler(android.os.Looper.getMainLooper()).post {
                             BaseIslandRenderer.refreshDynamicWidth()
                         }
@@ -790,7 +807,15 @@ class HookEntry : XposedModule() {
                 if (key == RootConstants.KEY_HOOK_ISLAND_ALBUM_COVER_STYLE_APP_WHITELIST) {
                     IslandAlbumCoverStyleHooker.refresh()
                 }
-                if (key == RootConstants.KEY_HOOK_ISLAND_DYNAMIC_WIDTH) {
+                if (key == RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR ||
+                    key == RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_GRADIENT ||
+                    key == RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR_MODE
+                ) {
+                    IslandMusicWaveColorHooker.refresh()
+                }
+                if (key == RootConstants.KEY_HOOK_ISLAND_DYNAMIC_WIDTH ||
+                    key == RootConstants.KEY_HOOK_ISLAND_DYNAMIC_LIMIT ||
+                    key == RootConstants.KEY_HOOK_ISLAND_DUET_FIXED_LENGTH) {
                     BaseIslandRenderer.refreshDynamicWidth()
                 } else {
                     BaseIslandRenderer.refreshActiveIsland()

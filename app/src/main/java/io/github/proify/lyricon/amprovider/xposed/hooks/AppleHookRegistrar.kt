@@ -14,6 +14,7 @@ import io.github.proify.lyricon.amprovider.xposed.ProviderLogger
 import io.github.proify.lyricon.amprovider.xposed.AppleMusicDexKitWatchdog
 import io.github.proify.lyricon.amprovider.xposed.internal.ArgumentRewriteHook
 import io.github.proify.lyricon.amprovider.xposed.internal.CallbackHook
+import io.github.proify.lyricon.amprovider.xposed.internal.ConditionalSkipHook
 import io.github.proify.lyricon.amprovider.xposed.internal.ConditionalVoidSkipHook
 import io.github.proify.lyricon.amprovider.xposed.internal.ResultOverrideHook
 import io.github.proify.lyricon.amprovider.xposed.internal.ScopedCallbackHook
@@ -66,6 +67,13 @@ internal class AppleHookRegistrar(
         }
         installHooker(executable, ConditionalVoidSkipHook(shouldSkip))
     }
+
+    /** 非 void 方法的条件跳过；[skippedResult] 给出命中时返回给调用方的值。 */
+    fun installConditionalSkipHook(
+        executable: Executable,
+        shouldSkip: (Chain) -> Boolean,
+        skippedResult: (Chain) -> Any?,
+    ) = installHooker(executable, ConditionalSkipHook(shouldSkip, skippedResult))
 
     fun installResultOverrideHook(
         executable: Executable,

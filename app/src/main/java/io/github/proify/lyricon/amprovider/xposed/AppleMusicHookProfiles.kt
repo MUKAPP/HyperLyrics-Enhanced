@@ -166,6 +166,8 @@ internal enum class AppleMusicRuntimeMember {
     LYRICS_COOKIE_VALUE_FIELD,
     LYRICS_SOURCE_MENU_FRAGMENT_FIELD,
     LYRICS_SOURCE_MENU_FRAGMENT_CLASS,
+    PLAYER_MODE_ENUM_CLASS,
+    PLAYER_MODE_SWITCH_METHOD,
     LYRICS_NATIVE_LINE_TEXT_METHOD,
     LYRICS_NATIVE_TRANSLATION_TEXT_METHOD,
     LYRICS_NATIVE_PRONUNCIATION_TEXT_METHOD,
@@ -2007,9 +2009,9 @@ internal object AppleMusicHookProfiles {
             ),
         )
 
+
     fun profileFor(version: AppleMusicVersion): AppleMusicHookProfile? =
         KNOWN_PROFILES.firstOrNull { profile -> profile.matches(version) }
-
     fun exactTargets(
         version: AppleMusicVersion,
         hookPoint: AppleMusicHookPoint,
@@ -2024,6 +2026,35 @@ internal object AppleMusicHookProfiles {
             .distinct()
     }
 }
+
+/**
+ * 平板播放页布局相关资源名。资源名不随混淆变化，但资源 ID 会随版本重排，
+ * 因此运行期通过 Resources#getIdentifier 按名解析，禁止在业务代码写死 ID。
+ *
+ * Verified from Apple Music 6.5.2 (1586) base.apk resource table (aapt2 dump resources):
+ * - bottom_navigation (0x7f0d008e)：同一资源 id 三个变体——res/layout（手机 root_stacked
+ *   全屏形态）、res/layout-w640dp-port-v13 与 res/layout-w640dp-land-v13（平板 root_flat
+ *   侧板形态，root 上声明 StaticCollapsedBottomSheetBehavior）。
+ * - activity_main_content_layout (0x7f0d0040) 在 XML 第 69 行 include bottom_navigation；
+ *   必须在 Resources.getLayout 层覆盖该路径，不能假定每次都调用 inflate(int,...)。
+ * - player_container = 0x7f0a08a2：bottom_navigation 变体内承载播放器 sheet 的
+ *   CoordinatorLayout，平板变体里被 layout_constraintDimensionRatio="15:28"（
+ *   string/player_aspect_ratio）约束为右侧面板；注意 music_player.xml 根布局复用了同一 ID。
+ * - player_fragments_host = 0x7f0a08a4：fragment_player_main 内承载歌曲/歌词/队列
+ *   子 Fragment 视图的 FrameLayout。
+ * - bottom_navigation（id 0x7f0a0160）在手机 XML 中是 wrap_content + layout_gravity=center，
+ *   base 元素上带 background=background_color_layer1；其父 bottom_navigation_tabs_frame
+ *   （0x7f0a0163）是 match_parent 且无背景。平板上该组合会留下两侧透明区。
+ * - current_player_item (0x7f0a02ce) / player_action_buttons (0x7f0a08a0) /
+ *   player_controls (0x7f0a08a3)：歌词页（fragment_player_lyrics_sheet）与
+ *   队列页（new_fragment_player_queue_view）内部重复的歌曲页元素。
+ * - 横屏全屏几何相关（对齐第三方平板适配包对 w640dp-land 布局的改写，1586 资源表核实）：
+ *   navigation_tabs_height（底栏 bar 定高）、player_container_elevation（bar 的 elevation）、
+ *   shadow_height + bg_player_top_shadow（bar 顶部的渐变阴影）、separator_color（bar 顶部
+ *   1dp 分隔线）、default_padding（右栏窗格边距）、current_player_margin_top（歌词页顶部
+ *   margin，右栏内需清零）、enter_full_screen（歌曲页“进入全屏”按钮，横屏置 GONE）、
+ *   controls / controls_tap_target（右栏歌词页隐藏的控件区，连同 current_player_item）。
+ */
 
 internal data class ResolvedAppleMusicHookClass(
     val target: AppleMusicHookTarget,
@@ -2563,6 +2594,7 @@ internal class AppleMusicHookResolver(
             AppleMusicHookPoint.LISTEN_NOW_DELEGATING_ITEM,
             AppleMusicHookPoint.LISTEN_NOW_CUSTOM_IMAGE_VIEW,
             AppleMusicHookPoint.LISTEN_NOW_MEDIA_ENTITY,
+            AppleMusicHookPoint.LISTEN_NOW_COLLECTION_ITEM_VIEW,
             AppleMusicHookPoint.LISTEN_NOW_COLLECTION_ITEM_VIEW -> true
         }
     }

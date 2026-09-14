@@ -3,6 +3,8 @@ package com.juren233.hyperlyricsenhanced.root.island
 import android.view.View
 import android.view.ViewGroup
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import com.juren233.hyperlyricsenhanced.lyric.view.RichLyricLineView
+import com.juren233.hyperlyricsenhanced.lyric.view.SpaceGateRichLyricLineView
 import com.juren233.hyperlyricsenhanced.root.LyriconDataBridge
 import com.juren233.hyperlyricsenhanced.root.island.renderer.BaseIslandRenderer
 import com.juren233.hyperlyricsenhanced.root.utils.HookLogger
@@ -60,6 +62,22 @@ internal object IslandTextHookerSupport {
         IslandLyricTextInjector.refreshCurrentContent(fakeView, includeLyricSlots = true, force = true, suppressAnimation = true)
         IslandLyricTextInjector.freezeInjectedLyricProgress(fakeView, LyriconDataBridge.currentPosition)
         fakeView.alpha = 1f
+        // 冻结快照可能落在数据暂缺或视图被重置的瞬间（签名去重感知不到实际内容丢失），
+        // 过渡开始后补一次完整注入+校验刷新：丢失内容在此处回填并重新冻结，避免收回动画全程主行空白。
+        fakeView.post {
+            if (!IslandProbeUtils.isSuperIslandEnabled()) return@post
+            if (!shouldRenderInjectedIsland()) return@post
+            if (!fakeView.isAttachedToWindow) return@post
+            IslandLyricTextInjector.injectSlots(fakeView, reconfigureExisting = true, suppressAnimation = true)
+            IslandLyricTextInjector.refreshCurrentContent(
+                fakeView,
+                includeLyricSlots = true,
+                force = true,
+                suppressAnimation = true,
+            )
+            IslandLyricTextInjector.freezeInjectedLyricProgress(fakeView, LyriconDataBridge.currentPosition)
+            logFakeSlotSnapshot("prepare_post", fakeView, source)
+        }
         HookLogger.d(TAG, "已准备过渡冻结 fake view: 来源=$source")
     }
 
@@ -93,6 +111,23 @@ internal object IslandTextHookerSupport {
         if (changed) {
             IslandHostFacade.triggerSystemRelayout(realView)
         }
+        // 收起结束后原生渲染的 capsule 仍是 fake 视图：其槽位在过渡拆建后常处于空模型
+        // （主行被 hug 成 0px 宽，视觉上主行消失）。这里把 fake 也补成完整内容并重新冻结，
+        // 保证无论原生展示哪棵树，用户看到的都是完整双行内容。
+        fakeView.post {
+            if (!IslandProbeUtils.isSuperIslandEnabled()) return@post
+            if (!shouldRenderInjectedIsland()) return@post
+            if (!fakeView.isAttachedToWindow) return@post
+            IslandLyricTextInjector.injectSlots(fakeView, reconfigureExisting = true, suppressAnimation = true)
+            IslandLyricTextInjector.refreshCurrentContent(
+                fakeView,
+                includeLyricSlots = true,
+                force = true,
+                suppressAnimation = true,
+            )
+            IslandLyricTextInjector.freezeInjectedLyricProgress(fakeView, LyriconDataBridge.currentPosition)
+            logFakeSlotSnapshot("restore_post", fakeView, source)
+        }
         HookLogger.d(TAG, "fake view 过渡结束后已恢复真实岛: 来源=$source, 重新布局=$changed")
     }
 
@@ -116,8 +151,14 @@ internal object IslandTextHookerSupport {
 
     /** Clears the current lyric presentation but keeps the real island registered for resume. */
     fun clearInjectedIsland(viewGroup: ViewGroup, suppressRelayout: Boolean = false) {
+        // Native re-posts the same island update every second while media progress advances
+        // (updateBigIslandView), and this hook runs on each of those. Recalculate the host
+        // width only when this call actually removed visible injected content: otherwise every
+        // native update re-enters the width calculation and keeps re-laying out the island
+        // content, which is the persistent flicker the user sees.
+        val hadVisibleInjectedContent = IslandLyricTextInjector.hasVisibleInjectedContent(viewGroup)
         IslandHostFacade.clearInjectedViews(viewGroup)
-        if (!suppressRelayout) {
+        if (!suppressRelayout && hadVisibleInjectedContent) {
             IslandHostFacade.triggerSystemRelayout(viewGroup)
         }
     }
@@ -136,10 +177,10 @@ internal object IslandTextHookerSupport {
         )
         if (!decision.shouldClear) return
 
-        clearInjectedIsland(
-            viewGroup = viewGroup,
-            suppressRelayout = !decision.shouldRelayout,
-        )
+        IslandHostFacade.clearInjectedViews(viewGroup)
+        if (decision.shouldRelayout) {
+            IslandHostFacade.triggerSystemRelayout(viewGroup)
+        }
     }
 
     fun restoreAdapterModule(adapter: Any?, moduleType: String?, source: String) {
@@ -159,6 +200,25 @@ internal object IslandTextHookerSupport {
                 it.name == name && it.parameterTypes.isEmpty()
             }?.invoke(receiver)
         }.getOrNull()
+    }
+
+    /** debug-only：逐槽记录 fake 视图的实际绑定状态，用于定位"主行空模型 0px"残留的具体环节。 */
+    private fun logFakeSlotSnapshot(phase: String, fakeView: ViewGroup, source: String) {
+        if (!BuildConfig.DEBUG) return
+        fun describe(view: View?): String = when (view) {
+            null -> "missing"
+            is RichLyricLineView ->
+                "found raw=${view.rawLine != null} mainLw=${view.main.lineWidth} secLw=${view.secondary.lineWidth} attached=${view.isAttachedToWindow}"
+            is SpaceGateRichLyricLineView ->
+                "found raw=${view.rawLine != null} mainLw=${view.main.lineWidth} secLw=${view.secondary.lineWidth} attached=${view.isAttachedToWindow}"
+            else -> "other:${view.javaClass.simpleName}"
+        }
+        val left = fakeView.findViewWithTag<View>(IslandProbeUtils.LEFT_TEST_VIEW_TAG)
+        val right = fakeView.findViewWithTag<View>(IslandProbeUtils.RIGHT_TEST_VIEW_TAG)
+        HookLogger.d(
+            TAG,
+            "[FakeSlotDiag] phase=$phase 来源=$source left=(${describe(left)}) right=(${describe(right)})"
+        )
     }
 
     fun findFieldValue(receiver: Any?, name: String): Any? {

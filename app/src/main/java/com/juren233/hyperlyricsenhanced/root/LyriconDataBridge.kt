@@ -66,6 +66,17 @@ object LyriconDataBridge : StateResetter {
     /** AI 翻译完成后的回调，由 LyriconSource 设置 */
     var onAiTranslationComplete: (() -> Unit)? = null
 
+    private val songChangedListeners =
+        java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
+
+    fun addSongChangedListener(listener: () -> Unit) {
+        songChangedListeners.add(listener)
+    }
+
+    fun removeSongChangedListener(listener: () -> Unit) {
+        songChangedListeners.remove(listener)
+    }
+
     fun updateLyricPackage(packageName: String?) {
         MediaCardDiagnosticLogger.log(
             stage = "bridge",
@@ -168,6 +179,9 @@ object LyriconDataBridge : StateResetter {
             reason = if (song == null) "cleared" else "prepared",
             details = "incomingId=${MediaCardDiagnosticLogger.sanitize(song?.id)},version=${versionCounter.get()}",
         )
+        if (song != null) {
+            songChangedListeners.forEach { listener -> listener() }
+        }
     }
 
     fun replaceSameSongContent(song: Song): Boolean {
@@ -271,12 +285,17 @@ object LyriconDataBridge : StateResetter {
         val foundLine = timingNavigator.lineAtOrPrevious(position)
         currentUnmergedLyricLine = unmergedTimingNavigator.lineAtOrPrevious(position)
 
-        val previewLine = earlyNextLinePreview(foundLine, position)
         val previousLine = currentLyricLine
         val previousInterlude = currentInterlude
-        val interlude = if (previewLine == null) {
-            interludeTracker.evaluate(position, foundLine, previousInterlude)
-        } else null
+        val interlude = interludeTracker.evaluate(
+            position,
+            foundLine,
+            previousInterlude,
+            earlyNextLinePreviewMs,
+        )
+        // 长间奏（>=7s）整段归间奏指示器；提前预览只在间奏之外生效——
+        // 短间隙直接预览，间奏尾部按提前量提前切到下一句。
+        val previewLine = if (interlude == null) earlyNextLinePreview(foundLine, position) else null
         currentInterlude = interlude
         currentInterludeType = interlude?.type
 

@@ -72,16 +72,47 @@ class LyriconDataBridgeTest {
     }
 
     @Test
-    fun `preview replaces the gap without reverting to interlude dots`() {
-        LyriconDataBridge.configureEarlyNextLinePreview(1, 100)
+    fun `interlude dots take over the long gap and hand over early when preview is enabled`() {
+        LyriconDataBridge.configureEarlyNextLinePreview(2, 100)
         LyriconDataBridge.updateSong(Song(lyrics = listOf(
             RichLyricLine(begin = 0, end = 1000, text = "Current"),
             RichLyricLine(begin = 10000, end = 11000, text = "Next"),
         )))
-        LyriconDataBridge.updatePosition(1000)
-        assertEquals("Next", LyriconDataBridge.currentLyric)
-        assertFalse(LyriconDataBridge.updatePosition(7000))
+        LyriconDataBridge.updatePosition(899)
+        assertEquals("Current", LyriconDataBridge.currentLyric)
+
+        assertTrue(LyriconDataBridge.updatePosition(900))
+        assertEquals(InterludeTracker.Type.INTERLUDE, LyriconDataBridge.currentInterludeType)
+        assertEquals("•••", LyriconDataBridge.currentLyric)
+        assertEquals(900L, LyriconDataBridge.currentLyricLine?.begin)
+        assertTrue(
+            LyriconDataBridge.currentLyricLine?.metadata
+                ?.getBoolean(LyricMetadataKeys.INSTRUMENTAL) == true
+        )
+        assertEquals("Next", LyriconDataBridge.currentNextLyricLine?.text)
+
+        assertFalse(LyriconDataBridge.updatePosition(5000))
+
+        assertTrue(LyriconDataBridge.updatePosition(9900))
         assertEquals(null, LyriconDataBridge.currentInterludeType)
+        assertEquals("Next", LyriconDataBridge.currentLyric)
+        assertFalse(LyriconDataBridge.updatePosition(10000))
+    }
+
+    @Test
+    fun `early preview does not shift intro dots without a current line`() {
+        LyriconDataBridge.configureEarlyNextLinePreview(2, 100)
+        LyriconDataBridge.updateSong(
+            Song(lyrics = listOf(RichLyricLine(begin = 8000, end = 10_000, text = "First line")))
+        )
+
+        LyriconDataBridge.updatePosition(7900)
+        assertEquals(InterludeTracker.Type.INTRO, LyriconDataBridge.currentInterludeType)
+        assertEquals("•••", LyriconDataBridge.currentLyric)
+
+        assertTrue(LyriconDataBridge.updatePosition(8000))
+        assertEquals(null, LyriconDataBridge.currentInterludeType)
+        assertEquals("First line", LyriconDataBridge.currentLyric)
     }
 
     @Test

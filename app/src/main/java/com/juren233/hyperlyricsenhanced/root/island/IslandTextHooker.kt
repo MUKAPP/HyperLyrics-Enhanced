@@ -46,6 +46,10 @@ internal object IslandTextHooker {
                     HookLogger.d(TAG, "已 Hook calculateBigIslandWidth: $method")
                 }
 
+            installFeature("歌词宽度转场律动保护") {
+                IslandWidthEventRebindGuard.install(module, cl)
+            }
+
             installDynamicMinWidthHook(module, cl)
             installMaxWidthUnlockHook(module, cl)
 

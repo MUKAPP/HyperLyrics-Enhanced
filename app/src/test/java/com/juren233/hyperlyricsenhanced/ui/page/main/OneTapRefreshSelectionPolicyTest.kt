@@ -83,7 +83,7 @@ class OneTapRefreshSelectionPolicyTest {
     @Test
     fun `installed catalog puts scoped apps in order and excludes apps outside module scope`() {
         assertEquals(
-            listOf("Apple Music", "网易云音乐", "QQ音乐"),
+            listOf("Apple Music", "网易云音乐", "QQ音乐", "小米音乐"),
             OneTapRefreshCatalog.installedMusicApps(
                 musicAppIds + setOf(
                     "com.miui.player",

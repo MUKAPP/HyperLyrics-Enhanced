@@ -34,10 +34,18 @@ object OfficialProviderCatalog {
         Definition(
             id = "qqmusic",
             displayName = "QQ音乐",
-            targetPackages = setOf("com.tencent.qqmusic", "com.tencent.qqmusicpad"),
-            secondaryProcesses = setOf("com.tencent.qqmusic:QQPlayerService"),
+            targetPackages = setOf(
+                "com.tencent.qqmusic",
+                "com.tencent.qqmusicpad",
+                "com.miui.player",
+            ),
+            secondaryProcesses = setOf(
+                "com.tencent.qqmusic:QQPlayerService",
+                "com.miui.player:remote",
+            ),
             targetDisplayNames = mapOf(
                 "com.tencent.qqmusicpad" to "QQ音乐HD",
+                "com.miui.player" to "小米音乐",
             ),
         ),
         Definition(

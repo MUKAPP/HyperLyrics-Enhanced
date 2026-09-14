@@ -3,6 +3,11 @@ package com.juren233.hyperlyricsenhanced.ui.page
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -33,6 +39,7 @@ import com.juren233.hyperlyricsenhanced.common.PrefsBridge
 import com.juren233.hyperlyricsenhanced.common.UIConstants
 import com.juren233.hyperlyricsenhanced.ui.navigation.LocalNavigator
 import com.juren233.hyperlyricsenhanced.ui.navigation.Route
+import com.juren233.hyperlyricsenhanced.ui.utils.AppUtils
 import com.juren233.hyperlyricsenhanced.ui.utils.BlurredBar
 import com.juren233.hyperlyricsenhanced.ui.utils.LocaleUtils
 import com.juren233.hyperlyricsenhanced.ui.utils.pageScrollModifiers
@@ -286,6 +293,21 @@ private fun LazyListScope.settingsSections(
                 }
                 var excludeFromRecents by remember { mutableStateOf(prefs.getBoolean(UIConstants.KEY_EXCLUDE_FROM_RECENTS, UIConstants.DEFAULT_EXCLUDE_FROM_RECENTS)) }
                 SwitchPreference(title = stringResource(R.string.title_exclude_from_recents), checked = excludeFromRecents, onCheckedChange = { excludeFromRecents = it; prefs.edit { putBoolean(UIConstants.KEY_EXCLUDE_FROM_RECENTS, it) }; setExcludeFromRecents(context, it) })
+                var hideAppIcon by remember { mutableStateOf(prefs.getBoolean(UIConstants.KEY_HIDE_APP_ICON, UIConstants.DEFAULT_HIDE_APP_ICON)) }
+                SwitchPreference(title = stringResource(R.string.title_hide_app_icon), checked = hideAppIcon, onCheckedChange = { hideAppIcon = it; PrefsBridge.putBoolean(UIConstants.KEY_HIDE_APP_ICON, it); AppUtils.applyLauncherIconVisibility(context, it) })
+                AnimatedVisibility(
+                    visible = hideAppIcon,
+                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+                ) {
+                    var showSettingsEntry by remember { mutableStateOf(prefs.getBoolean(UIConstants.KEY_SHOW_SETTINGS_ENTRY, UIConstants.DEFAULT_SHOW_SETTINGS_ENTRY)) }
+                    SwitchPreference(
+                        title = stringResource(R.string.title_show_settings_entry),
+                        summary = stringResource(R.string.summary_show_settings_entry),
+                        checked = showSettingsEntry,
+                        onCheckedChange = { showSettingsEntry = it; PrefsBridge.putBoolean(UIConstants.KEY_SHOW_SETTINGS_ENTRY, it) },
+                    )
+                }
             }
         }
     }

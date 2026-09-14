@@ -13,6 +13,11 @@ import org.junit.Test
 
 class LivePreferenceRefreshPolicyTest {
     @Test
+    fun `dynamic limit toggle refreshes SystemUI immediately`() {
+        assertTrue(LivePreferenceRefreshPolicy.contains(RootConstants.KEY_HOOK_ISLAND_DYNAMIC_LIMIT))
+    }
+
+    @Test
     fun `cover text color changes refresh SystemUI immediately`() {
         assertTrue(
             LivePreferenceRefreshPolicy.contains(
@@ -62,6 +67,31 @@ class LivePreferenceRefreshPolicyTest {
                 RootConstants.KEY_HOOK_ISLAND_ALBUM_COVER_STYLE_APP_WHITELIST
             )
         )
+    }
+
+    @Test
+    fun `music wave color mode changes refresh SystemUI immediately`() {
+        assertTrue(
+            LivePreferenceRefreshPolicy.contains(
+                RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR
+            )
+        )
+        assertTrue(
+            LivePreferenceRefreshPolicy.contains(
+                RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_GRADIENT
+            )
+        )
+        assertTrue(
+            LivePreferenceRefreshPolicy.contains(
+                RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR_MODE
+            )
+        )
+    }
+
+    @Test
+    fun `dynamic width and duet fixed length toggles refresh SystemUI immediately`() {
+        assertTrue(LivePreferenceRefreshPolicy.contains(RootConstants.KEY_HOOK_ISLAND_DYNAMIC_WIDTH))
+        assertTrue(LivePreferenceRefreshPolicy.contains(RootConstants.KEY_HOOK_ISLAND_DUET_FIXED_LENGTH))
     }
 
     @Test

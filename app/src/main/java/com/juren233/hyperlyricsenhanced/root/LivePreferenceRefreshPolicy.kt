@@ -11,6 +11,9 @@ import com.juren233.hyperlyricsenhanced.common.RootConstants
 /** Preference keys that require an immediate SystemUI runtime refresh after app-side changes. */
 internal object LivePreferenceRefreshPolicy {
     private val keys = setOf(
+        RootConstants.KEY_HOOK_ISLAND_DYNAMIC_LIMIT,
+        RootConstants.KEY_HOOK_ISLAND_DYNAMIC_WIDTH,
+        RootConstants.KEY_HOOK_ISLAND_DUET_FIXED_LENGTH,
         RootConstants.KEY_HOOK_LYRIC_MODE,
         RootConstants.KEY_HOOK_ISLAND_CONTENT_LEFT,
         RootConstants.KEY_HOOK_ISLAND_CONTENT_RIGHT,
@@ -25,6 +28,9 @@ internal object LivePreferenceRefreshPolicy {
         RootConstants.KEY_HOOK_MONET_TEXT_COLOR,
         RootConstants.KEY_HOOK_ISLAND_PROGRESS_COLOR_MODE,
         RootConstants.KEY_HOOK_ISLAND_PROGRESS_CUSTOM_COLOR,
+        RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR,
+        RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_GRADIENT,
+        RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR_MODE,
         RootConstants.KEY_HOOK_ISLAND_ALBUM_COVER_STYLE_APP_WHITELIST,
         RootConstants.KEY_ACTIVE_MEDIA_SESSION_PACKAGES,
     )

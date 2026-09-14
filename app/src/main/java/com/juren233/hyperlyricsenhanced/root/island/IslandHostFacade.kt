@@ -51,9 +51,10 @@ internal object IslandHostFacade {
     }
 
     fun clearAndRefresh(rootView: ViewGroup) {
-        IslandViewHelper.clearInjectedViews(rootView)
-        IslandProgressGlowController.clear(rootView)
-        IslandViewHelper.triggerSystemRelayout(rootView)
+        // Status-bar width refreshes also reach this path while paused. Share the
+        // visible-content guard used by native updates so an already cleared host
+        // does not restart its layout on each status-bar tick.
+        IslandTextHookerSupport.clearInjectedIsland(rootView)
     }
 
     fun clearInjectedViews(rootView: ViewGroup) {
@@ -63,6 +64,10 @@ internal object IslandHostFacade {
 
     fun triggerSystemRelayout(rootView: ViewGroup) {
         IslandViewHelper.triggerSystemRelayout(rootView)
+    }
+
+    fun triggerLyricContentRelayout(rootView: ViewGroup) {
+        IslandViewHelper.triggerLyricContentRelayout(rootView)
     }
 
     fun injectHostGlow(viewGroup: ViewGroup, islandData: Any?, prefs: SharedPreferences) {

@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
+import com.juren233.hyperlyricsenhanced.common.IslandMusicWaveColorMode
 import com.juren233.hyperlyricsenhanced.common.IslandProgressColorMode
 import com.juren233.hyperlyricsenhanced.common.RootConstants
 import com.juren233.hyperlyricsenhanced.common.UIConstants
@@ -95,15 +96,34 @@ fun SuperIslandSettingsPage() {
         )
     }
     var audioRhythm by remember { mutableStateOf(prefs.getBoolean(RootConstants.KEY_HOOK_ISLAND_RIGHT_ICON, RootConstants.DEFAULT_HOOK_ISLAND_RIGHT_ICON)) }
-    var optimizeMusicWaveColor by remember { mutableStateOf(prefs.getBoolean(RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR, RootConstants.DEFAULT_HOOK_ISLAND_MUSIC_WAVE_COLOR)) }
-    var musicWaveGradient by remember { mutableStateOf(prefs.getBoolean(RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_GRADIENT, RootConstants.DEFAULT_HOOK_ISLAND_MUSIC_WAVE_GRADIENT)) }
+    var musicWaveColorMode by remember {
+        mutableIntStateOf(
+            IslandMusicWaveColorMode.resolve(
+                storedMode = prefs.getInt(
+                    RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR_MODE,
+                    IslandMusicWaveColorMode.UNSPECIFIED,
+                ),
+                hasLegacyCoverPreference = prefs.contains(RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR),
+                legacyCoverEnabled = prefs.getBoolean(
+                    RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR,
+                    RootConstants.DEFAULT_HOOK_ISLAND_MUSIC_WAVE_COLOR,
+                ),
+                legacyCoverGradient = prefs.getBoolean(
+                    RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_GRADIENT,
+                    RootConstants.DEFAULT_HOOK_ISLAND_MUSIC_WAVE_GRADIENT,
+                ),
+            )
+        )
+    }
     var leftPaddingLeft by remember { mutableIntStateOf(prefs.getInt(RootConstants.KEY_HOOK_ISLAND_LEFT_PADDING_LEFT, RootConstants.DEFAULT_HOOK_ISLAND_LEFT_PADDING_LEFT)) }
     var leftPaddingRight by remember { mutableIntStateOf(prefs.getInt(RootConstants.KEY_HOOK_ISLAND_LEFT_PADDING_RIGHT, RootConstants.DEFAULT_HOOK_ISLAND_LEFT_PADDING_RIGHT)) }
     var rightPaddingLeft by remember { mutableIntStateOf(prefs.getInt(RootConstants.KEY_HOOK_ISLAND_RIGHT_PADDING_LEFT, RootConstants.DEFAULT_HOOK_ISLAND_RIGHT_PADDING_LEFT)) }
     var rightPaddingRight by remember { mutableIntStateOf(prefs.getInt(RootConstants.KEY_HOOK_ISLAND_RIGHT_PADDING_RIGHT, RootConstants.DEFAULT_HOOK_ISLAND_RIGHT_PADDING_RIGHT)) }
     var leftContentWidth by remember { mutableIntStateOf(prefs.getInt(RootConstants.KEY_HOOK_ISLAND_LEFT_CONTENT_MAX_WIDTH, RootConstants.DEFAULT_HOOK_ISLAND_LEFT_CONTENT_MAX_WIDTH).coerceIn(0, 500)) }
     var rightContentWidth by remember { mutableIntStateOf(prefs.getInt(RootConstants.KEY_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH, RootConstants.DEFAULT_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH).coerceIn(0, 500)) }
+    var dynamicLimit by remember { mutableStateOf(prefs.getBoolean(RootConstants.KEY_HOOK_ISLAND_DYNAMIC_LIMIT, RootConstants.DEFAULT_HOOK_ISLAND_DYNAMIC_LIMIT)) }
     var dynamicWidth by remember { mutableStateOf(prefs.getBoolean(RootConstants.KEY_HOOK_ISLAND_DYNAMIC_WIDTH, RootConstants.DEFAULT_HOOK_ISLAND_DYNAMIC_WIDTH)) }
+    var duetFixedLength by remember { mutableStateOf(prefs.getBoolean(RootConstants.KEY_HOOK_ISLAND_DUET_FIXED_LENGTH, RootConstants.DEFAULT_HOOK_ISLAND_DUET_FIXED_LENGTH)) }
     var afterPauseBehavior by remember { mutableIntStateOf(prefs.getInt(RootConstants.KEY_HOOK_ISLAND_BEHAVIOR_AFTER_PAUSE, RootConstants.DEFAULT_HOOK_ISLAND_BEHAVIOR_AFTER_PAUSE)) }
     var forceNextSongAtEnd by remember { mutableStateOf(prefs.getBoolean(RootConstants.KEY_HOOK_ISLAND_FORCE_NEXT_SONG_AT_END, RootConstants.DEFAULT_HOOK_ISLAND_FORCE_NEXT_SONG_AT_END)) }
     val storedNextSongDuration = prefs.getInt(
@@ -270,6 +290,20 @@ fun SuperIslandSettingsPage() {
             R.string.option_audio_cover_style_app_icon
         )
     }.map { stringResource(id = it) }
+    val musicWaveColorModeValues = remember {
+        listOf(
+            RootConstants.ISLAND_MUSIC_WAVE_COLOR_MODE_DISABLED,
+            RootConstants.ISLAND_MUSIC_WAVE_COLOR_MODE_COVER,
+            RootConstants.ISLAND_MUSIC_WAVE_COLOR_MODE_COVER_GRADIENT
+        )
+    }
+    val musicWaveColorModeOptions = remember {
+        listOf(
+            R.string.option_music_wave_color_mode_off,
+            R.string.option_music_wave_color_mode_cover,
+            R.string.option_music_wave_color_mode_cover_gradient
+        )
+    }.map { stringResource(id = it) }
     val progressStyleOptions = remember {
         listOf(
             R.string.option_island_progress_top_clockwise,
@@ -313,24 +347,24 @@ fun SuperIslandSettingsPage() {
     ) { innerPadding ->
         val lazyListState = rememberLazyListState()
         NumberInputDialog(
-            show = showLeftContentWidthDialog, 
+            show = showLeftContentWidthDialog && !dynamicLimit,
             title = stringResource(id = R.string.title_left_content_width), 
             label = stringResource(id = R.string.label_content_width_range), 
             initialValue = leftContentWidth, 
             min = 0,
             max = 500,
             onDismiss = { showLeftContentWidthDialog = false }, 
-            onConfirm = { value -> leftContentWidth = value; saveConfig(RootConstants.KEY_HOOK_ISLAND_LEFT_CONTENT_MAX_WIDTH, value) }
+            onConfirm = { value -> if (!dynamicLimit) { leftContentWidth = value; saveConfig(RootConstants.KEY_HOOK_ISLAND_LEFT_CONTENT_MAX_WIDTH, value) } }
         )
         NumberInputDialog(
-            show = showRightContentWidthDialog, 
+            show = showRightContentWidthDialog && !dynamicLimit,
             title = stringResource(id = R.string.title_right_content_width), 
             label = stringResource(id = R.string.label_content_width_range), 
             initialValue = rightContentWidth, 
             min = 0,
             max = 500,
             onDismiss = { showRightContentWidthDialog = false }, 
-            onConfirm = { value -> rightContentWidth = value; saveConfig(RootConstants.KEY_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH, value) }
+            onConfirm = { value -> if (!dynamicLimit) { rightContentWidth = value; saveConfig(RootConstants.KEY_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH, value) } }
         )
         PaddingInputDialog(show = showLeftPaddingDialog, title = stringResource(id = R.string.title_left_padding), initialLeft = leftPaddingLeft, initialRight = leftPaddingRight, onDismiss = { showLeftPaddingDialog = false }, onConfirm = { l, r -> leftPaddingLeft = l; leftPaddingRight = r; saveConfig(RootConstants.KEY_HOOK_ISLAND_LEFT_PADDING_LEFT, l); saveConfig(RootConstants.KEY_HOOK_ISLAND_LEFT_PADDING_RIGHT, r) })
         PaddingInputDialog(show = showRightPaddingDialog, title = stringResource(id = R.string.title_right_padding), initialLeft = rightPaddingLeft, initialRight = rightPaddingRight, onDismiss = { showRightPaddingDialog = false }, onConfirm = { l, r -> rightPaddingLeft = l; rightPaddingRight = r; saveConfig(RootConstants.KEY_HOOK_ISLAND_RIGHT_PADDING_LEFT, l); saveConfig(RootConstants.KEY_HOOK_ISLAND_RIGHT_PADDING_RIGHT, r) })
@@ -372,16 +406,54 @@ fun SuperIslandSettingsPage() {
                                     saveConfig(RootConstants.KEY_HOOK_ISLAND_DYNAMIC_WIDTH, it)
                                 }
                             )
-                            ArrowPreference(
-                                title = stringResource(id = R.string.title_left_content_width),
-                                endActions = { Text("$leftContentWidth", fontSize = MiuixTheme.textStyles.body2.fontSize, color = MiuixTheme.colorScheme.onSurfaceVariantActions) },
-                                onClick = { showLeftContentWidthDialog = true }
+                            AnimatedVisibility(
+                                visible = dynamicWidth,
+                                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+                            ) {
+                                SwitchPreference(
+                                    title = stringResource(id = R.string.title_island_duet_fixed_length),
+                                    summary = stringResource(id = R.string.summary_island_duet_fixed_length),
+                                    checked = duetFixedLength,
+                                    onCheckedChange = {
+                                        duetFixedLength = it
+                                        saveConfig(RootConstants.KEY_HOOK_ISLAND_DUET_FIXED_LENGTH, it)
+                                    }
+                                )
+                            }
+                            SwitchPreference(
+                                title = stringResource(id = R.string.title_island_dynamic_limit),
+                                summary = stringResource(id = R.string.summary_island_dynamic_limit),
+                                checked = dynamicLimit,
+                                onCheckedChange = {
+                                    dynamicLimit = it
+                                    if (it) {
+                                        showLeftContentWidthDialog = false
+                                        showRightContentWidthDialog = false
+                                    }
+                                    saveConfig(RootConstants.KEY_HOOK_ISLAND_DYNAMIC_LIMIT, it)
+                                }
                             )
-                            ArrowPreference(
-                                title = stringResource(id = R.string.title_right_content_width), 
-                                endActions = { Text("$rightContentWidth", fontSize = MiuixTheme.textStyles.body2.fontSize, color = MiuixTheme.colorScheme.onSurfaceVariantActions) }, 
-                                onClick = { showRightContentWidthDialog = true }
-                            )
+                            AnimatedVisibility(
+                                visible = !dynamicLimit,
+                                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+                            ) {
+                                Column {
+                                    ArrowPreference(
+                                        title = stringResource(id = R.string.title_left_content_width),
+                                        endActions = { Text("$leftContentWidth", fontSize = MiuixTheme.textStyles.body2.fontSize, color = MiuixTheme.colorScheme.onSurfaceVariantActions) },
+                                        enabled = !dynamicLimit,
+                                        onClick = { if (!dynamicLimit) showLeftContentWidthDialog = true }
+                                    )
+                                    ArrowPreference(
+                                        title = stringResource(id = R.string.title_right_content_width),
+                                        endActions = { Text("$rightContentWidth", fontSize = MiuixTheme.textStyles.body2.fontSize, color = MiuixTheme.colorScheme.onSurfaceVariantActions) },
+                                        enabled = !dynamicLimit,
+                                        onClick = { if (!dynamicLimit) showRightContentWidthDialog = true }
+                                    )
+                                }
+                            }
                             ArrowPreference(
                                 title = stringResource(id = R.string.title_left_padding), 
                                 endActions = { Text(stringResource(id = R.string.format_padding_pair, leftPaddingLeft, leftPaddingRight), fontSize = MiuixTheme.textStyles.body2.fontSize, color = MiuixTheme.colorScheme.onSurfaceVariantActions) }, 
@@ -427,26 +499,18 @@ fun SuperIslandSettingsPage() {
                             SwitchPreference(title = stringResource(id = R.string.title_audio_rhythm), checked = audioRhythm, onCheckedChange = { audioRhythm = it; saveConfig(RootConstants.KEY_HOOK_ISLAND_RIGHT_ICON, it) })
                             AnimatedVisibility(visible = audioRhythm) {
                                 Column {
-                                    SwitchPreference(
+                                    OverlayDropdownPreference(
                                         title = stringResource(id = R.string.title_audio_rhythm_cover_color),
-                                        checked = optimizeMusicWaveColor,
-                                        onCheckedChange = {
-                                            optimizeMusicWaveColor = it
-                                            saveConfig(RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR, it)
+                                        items = musicWaveColorModeOptions,
+                                        selectedIndex = musicWaveColorModeValues.indexOf(musicWaveColorMode).coerceAtLeast(0),
+                                        onSelectedIndexChange = { index ->
+                                            val mode = musicWaveColorModeValues[index]
+                                            musicWaveColorMode = mode
+                                            saveConfig(RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR_MODE, mode)
+                                            saveConfig(RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_COLOR, IslandMusicWaveColorMode.isEnabled(mode))
+                                            saveConfig(RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_GRADIENT, IslandMusicWaveColorMode.usesCoverGradient(mode))
                                         }
                                     )
-                                    AnimatedVisibility(visible = optimizeMusicWaveColor) {
-                                        Column {
-                                            SwitchPreference(
-                                                title = stringResource(id = R.string.title_audio_rhythm_gradient_color),
-                                                checked = musicWaveGradient,
-                                                onCheckedChange = {
-                                                    musicWaveGradient = it
-                                                    saveConfig(RootConstants.KEY_HOOK_ISLAND_MUSIC_WAVE_GRADIENT, it)
-                                                }
-                                            )
-                                        }
-                                    }
                                 }
                             }
                         }

@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import com.juren233.hyperlyricsenhanced.BuildConfig
 import com.juren233.hyperlyricsenhanced.common.RootConstants
 import com.juren233.hyperlyricsenhanced.common.media.MediaMetadataHelper
 import com.juren233.hyperlyricsenhanced.lyric.view.RichLyricLineView
@@ -13,6 +14,7 @@ import com.juren233.hyperlyricsenhanced.root.LyriconDataBridge
 import com.juren233.hyperlyricsenhanced.root.island.IslandAlbumCoverStyleHooker
 import com.juren233.hyperlyricsenhanced.root.island.IslandHostFacade
 import com.juren233.hyperlyricsenhanced.root.island.IslandLyricTextInjector
+import com.juren233.hyperlyricsenhanced.root.island.IslandMusicWaveColorHooker
 import com.juren233.hyperlyricsenhanced.root.island.IslandProbeUtils
 import com.juren233.hyperlyricsenhanced.root.island.IslandProgressGlowController
 import com.juren233.hyperlyricsenhanced.root.island.IslandSlotContentAssembler
@@ -33,6 +35,10 @@ object BaseIslandRenderer : IslandRenderer {
     // Main-thread preference refreshes coalesce, but must survive a subsequent
     // ordinary content refresh replacing the debounce runnable.
     private var dynamicWidthRefreshPending = false
+    // Distinguishes a full content refresh from a width-only recalculation. Width-only
+    // refreshes must not reset content caches: re-applying the same line on both slots
+    // resets their progress/marquee state, which reads as the two sides "refreshing".
+    private var fullRefreshPending = false
     private val pauseTransitionGuard = IslandPauseTransitionGuard()
     private val pauseRestoreRunnable = Runnable { commitDeferredNativeRestore() }
     private val nextSongPreviewActive = WeakHashMap<ViewGroup, NextSongPreviewState>()
@@ -73,6 +79,11 @@ object BaseIslandRenderer : IslandRenderer {
     fun currentPlaybackActive(): Boolean = playbackActive
 
     override fun refreshActiveIsland() {
+        fullRefreshPending = true
+        scheduleRefresh()
+    }
+
+    private fun scheduleRefresh() {
         mainHandler.removeCallbacks(refreshRunnable)
         mainHandler.postDelayed(refreshRunnable, REFRESH_DEBOUNCE_MS)
     }
@@ -111,12 +122,20 @@ object BaseIslandRenderer : IslandRenderer {
 
     fun refreshDynamicWidth() {
         dynamicWidthRefreshPending = true
-        refreshActiveIsland()
+        scheduleRefresh()
     }
 
     private fun performRefreshActiveIsland() {
         val refreshWidth = dynamicWidthRefreshPending
+        // Only a dynamic-limit width recalculation is pending: content is untouched, so the
+        // content signature/preview caches must stay intact. Clearing them forces both slots
+        // to re-apply their current line, which is the visible "两侧内容不断刷新更新" churn.
+        val fullRefresh = fullRefreshPending || !refreshWidth
+        if (BuildConfig.DEBUG) {
+            HookLogger.d("IslandDynamicLimit", "刷新类型: full=$fullRefresh width=$refreshWidth")
+        }
         dynamicWidthRefreshPending = false
+        fullRefreshPending = false
         val prefs = HookEntry.instance?.prefs ?: run {
             DisplayDiagnosticLogger.log("ISLAND", "skipped", "preferences_unavailable")
             return
@@ -137,10 +156,11 @@ object BaseIslandRenderer : IslandRenderer {
             return
         }
 
-        IslandSlotContentAssembler.invalidate()
-        synchronized(nextSongPreviewActive) { nextSongPreviewActive.clear() }
-        synchronized(nextSongPreviewFailures) { nextSongPreviewFailures.clear() }
-
+        if (fullRefresh) {
+            IslandSlotContentAssembler.invalidate()
+            synchronized(nextSongPreviewActive) { nextSongPreviewActive.clear() }
+            synchronized(nextSongPreviewFailures) { nextSongPreviewFailures.clear() }
+        }
         val activeViews = IslandViewRegistry.snapshotAttached(lyricPkg)
         if (activeViews.isEmpty()) {
             DisplayDiagnosticLogger.log("ISLAND", "skipped", "no_attached_view")
@@ -233,7 +253,7 @@ object BaseIslandRenderer : IslandRenderer {
                     }
                     val contentChanged = updateLyricContentForView(cv, prefs, config)
                     if (config.dynamicWidthEnabled && contentChanged) {
-                        IslandHostFacade.triggerSystemRelayout(cv)
+                        IslandHostFacade.triggerLyricContentRelayout(cv)
                     }
                     DisplayDiagnosticLogger.log(
                         channel = "ISLAND",
@@ -288,7 +308,7 @@ object BaseIslandRenderer : IslandRenderer {
                         position
                     )
                     if (config.dynamicWidthEnabled && previewChanged) {
-                        IslandHostFacade.triggerSystemRelayout(cv)
+                        IslandHostFacade.triggerLyricContentRelayout(cv)
                     }
                 }
             }
@@ -432,6 +452,8 @@ object BaseIslandRenderer : IslandRenderer {
     override fun clearAllViews() {
         mainHandler.removeCallbacks(refreshRunnable)
         mainHandler.removeCallbacks(pauseRestoreRunnable)
+        dynamicWidthRefreshPending = false
+        fullRefreshPending = false
         screenRefreshGeneration++
         pauseTransitionGuard.reset()
         playbackActive = false
@@ -451,6 +473,8 @@ object BaseIslandRenderer : IslandRenderer {
         config: IslandSlotRuntimeConfig
     ): Boolean {
         val mediaInfo = MediaMetadataHelper.getMediaInfo(cv.context, packageName, HookLogger)
+        // 律动取色与歌词/光效同源：内容刷新即喂入最新媒体信息，切歌后颜色实时跟随
+        IslandMusicWaveColorHooker.onMediaArtworkUpdated(mediaInfo)
         IslandHostFacade.updateHostGlow(cv, mediaInfo.albumArt, prefs)
         IslandHostFacade.updateProgressGlow(cv, packageName, mediaInfo, prefs)
         val leftChanged = updateSlot(cv, IslandProbeUtils.LEFT_TEST_VIEW_TAG, config.leftMode, prefs, config, mediaInfo)

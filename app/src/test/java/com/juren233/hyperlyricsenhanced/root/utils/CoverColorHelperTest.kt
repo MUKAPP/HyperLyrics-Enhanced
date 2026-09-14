@@ -180,4 +180,28 @@ class CoverColorHelperTest {
         assertEquals(listOf(0), indices.toList())
     }
 
+    @Test
+    fun `native two-slot gradient keeps the same endpoints as the text gradient`() {
+        val colors = intArrayOf(
+            0xFFFF0000.toInt(),
+            0xFFFF0101.toInt(),
+            0xFF0000FF.toInt(),
+            0xFFFFFF00.toInt(),
+        )
+
+        val gradient = CoverColorHelper.resolveNativeGradientColors(colors)!!
+
+        assertEquals(0xFFFF0000.toInt(), gradient.first)
+        assertEquals(0xFF0000FF.toInt(), gradient.second)
+    }
+
+    @Test
+    fun `native two-slot gradient falls back when palette has one unique color`() {
+        assertNull(
+            CoverColorHelper.resolveNativeGradientColors(
+                intArrayOf(0xFF336699.toInt(), 0xFF336699.toInt())
+            )
+        )
+    }
+
 }

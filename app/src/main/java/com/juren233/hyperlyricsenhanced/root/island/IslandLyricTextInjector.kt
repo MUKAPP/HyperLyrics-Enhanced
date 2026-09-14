@@ -45,7 +45,12 @@ internal object IslandLyricTextInjector {
             linkViews(rootView)
         }
 
-        changed = IslandNativeSlotPlacement.apply(rootView, config) || changed
+        changed = IslandNativeSlotPlacement.apply(
+            rootView,
+            config,
+            currentDuetAlignedRight(rootView, IslandProbeUtils.LEFT_TEST_VIEW_TAG),
+            currentDuetAlignedRight(rootView, IslandProbeUtils.RIGHT_TEST_VIEW_TAG),
+        ) || changed
         IslandHostFacade.applyHostSettings(rootView, prefs)
         IslandViewRegistry.refreshInjectedViews(rootView)
         if (changed) {
@@ -113,7 +118,12 @@ internal object IslandLyricTextInjector {
         if (config.shouldInjectRight) {
             changed = restoreExistingSlotLightweight(rootView, IslandProbeUtils.RIGHT_PARENT_NAME, IslandProbeUtils.RIGHT_TEST_VIEW_TAG) || changed
         }
-        changed = IslandNativeSlotPlacement.apply(rootView, config) || changed
+        changed = IslandNativeSlotPlacement.apply(
+            rootView,
+            config,
+            currentDuetAlignedRight(rootView, IslandProbeUtils.LEFT_TEST_VIEW_TAG),
+            currentDuetAlignedRight(rootView, IslandProbeUtils.RIGHT_TEST_VIEW_TAG),
+        ) || changed
         IslandHostFacade.applyHostSettings(rootView, prefs)
         IslandViewRegistry.refreshInjectedViews(rootView)
         return changed
@@ -139,7 +149,12 @@ internal object IslandLyricTextInjector {
             }
         }
 
-        changed = IslandNativeSlotPlacement.apply(rootView, config) || changed
+        changed = IslandNativeSlotPlacement.apply(
+            rootView,
+            config,
+            currentDuetAlignedRight(rootView, IslandProbeUtils.LEFT_TEST_VIEW_TAG),
+            currentDuetAlignedRight(rootView, IslandProbeUtils.RIGHT_TEST_VIEW_TAG),
+        ) || changed
         IslandHostFacade.applyHostSettings(rootView, prefs)
         IslandViewRegistry.refreshInjectedViews(rootView)
         return changed
@@ -405,8 +420,46 @@ internal object IslandLyricTextInjector {
         return changed
     }
 
-    private fun findIslandParentName(view: View): String? {
-        var current = view.parent as? View
+    /** 已绑定行的对唱方向（null=非行视图或无内容）。 */
+    private fun duetAlignedRightOf(view: View): Boolean? = when (view) {
+        is RichLyricLineView -> view.currentLineDuetAlignedRight
+        is SpaceGateRichLyricLineView -> view.currentLineDuetAlignedRight
+        else -> null
+    }
+
+    private fun currentDuetAlignedRight(rootView: ViewGroup, viewTag: String): Boolean? {
+        val wrapper = rootView.findViewWithTag<View>("${viewTag}_WRAPPER") as? ViewGroup ?: return null
+        for (i in 0 until wrapper.childCount) {
+            duetAlignedRightOf(wrapper.getChildAt(i))?.let { return it }
+        }
+        return null
+    }
+
+    /**
+     * 行内容落地时同步对唱锚点：wrapper 与原生模块一起按「已绑定行」的方向
+     * 翻转（右对唱→END）。必须在 `line` 写入的同一回调里调用——读的是落地后
+     * 的绑定行，淡出窗口内旧句方向不变（160164 契约），新句锚点不滞后一拍。
+     */
+    internal fun syncDuetGravityAfterContentLanding(view: View, config: IslandSlotRuntimeConfig) {
+        if (!config.dynamicWidthEnabled) return
+        val isLeft = view.tag == IslandProbeUtils.LEFT_TEST_VIEW_TAG
+        val alignedRight = duetAlignedRightOf(view)
+        val horizontal = config.wrapperHorizontalGravity(isLeft, alignedRight)
+        val wrapper = view.parent as? MaxWidthFrameLayout ?: return
+        val layoutParams = wrapper.layoutParams
+        if (layoutParams is FrameLayout.LayoutParams &&
+            layoutParams.gravity != Gravity.CENTER_VERTICAL or horizontal
+        ) {
+            layoutParams.gravity = Gravity.CENTER_VERTICAL or horizontal
+            wrapper.layoutParams = layoutParams
+            wrapper.requestLayout()
+        }
+        val module = wrapper.parent as? View ?: return
+        val injected = if (isLeft) config.shouldInjectLeft else config.shouldInjectRight
+        IslandNativeSlotPlacement.applyModuleGravity(module, injected, horizontal)
+    }
+
+    private fun findIslandParentName(view: View): String? {        var current = view.parent as? View
         while (current != null) {
             val name = if (current.id != View.NO_ID) {
                 runCatching { current.resources.getResourceEntryName(current.id) }.getOrNull()
@@ -442,7 +495,8 @@ internal object IslandLyricTextInjector {
         val layoutParams = wrapper.layoutParams
         val expectedWidth = wrapperLayoutWidth(config)
         val expectedGravity = Gravity.CENTER_VERTICAL or config.wrapperHorizontalGravity(
-            isLeft = config.isLeftParent(parentName)
+            isLeft = config.isLeftParent(parentName),
+            duetLineAlignedRight = duetAlignedRightOf(wrapper)
         )
         if (layoutParams is FrameLayout.LayoutParams && (
                 layoutParams.width != expectedWidth ||
@@ -515,7 +569,11 @@ internal object IslandLyricTextInjector {
         wrapper.measure(widthSpec, heightSpec)
         val finalHeight = if (heightPx > 0) heightPx else wrapper.measuredHeight
         wrapper.layout(0, 0, wrapper.measuredWidth, finalHeight)
-        return wasZeroWidth
+        // Report "changed" only when this pass actually produced a measurable wrapper.
+        // Returning the old zero-width state unconditionally made every native island
+        // update report a change and re-trigger the host relayout while the content was
+        // still zero-width. Zero-width content simply stays retryable.
+        return wrapper.measuredWidth > 0
     }
 
     private fun wrapperLayoutWidth(config: IslandSlotRuntimeConfig): Int {

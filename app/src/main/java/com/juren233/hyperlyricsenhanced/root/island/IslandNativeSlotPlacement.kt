@@ -15,11 +15,18 @@ internal object IslandNativeSlotPlacement {
     private val originalGravities = WeakHashMap<View, Int>()
     private val rhythmAnchors = WeakHashMap<ViewGroup, RhythmAnchor>()
 
-    fun apply(root: ViewGroup, config: IslandSlotRuntimeConfig): Boolean {
+    fun apply(
+        root: ViewGroup,
+        config: IslandSlotRuntimeConfig,
+        leftDuetAlignedRight: Boolean? = null,
+        rightDuetAlignedRight: Boolean? = null,
+    ): Boolean {
         val left = applySide(root, IslandProbeUtils.LEFT_PARENT_NAME,
-            config.dynamicWidthEnabled && config.shouldInjectLeft, config.wrapperHorizontalGravity(true))
+            config.dynamicWidthEnabled && config.shouldInjectLeft,
+            config.wrapperHorizontalGravity(true, leftDuetAlignedRight))
         val right = applySide(root, IslandProbeUtils.RIGHT_PARENT_NAME,
-            config.dynamicWidthEnabled && config.shouldInjectRight, config.wrapperHorizontalGravity(false))
+            config.dynamicWidthEnabled && config.shouldInjectRight,
+            config.wrapperHorizontalGravity(false, rightDuetAlignedRight))
         val rhythm = preserveRhythmAnchor(root,
             config.dynamicWidthEnabled && config.shouldInjectRight && config.showRhythm)
         return left || right || rhythm
@@ -109,6 +116,14 @@ internal object IslandNativeSlotPlacement {
 
     private fun applySide(root: ViewGroup, name: String, enabled: Boolean, horizontal: Int): Boolean {
         val module = IslandViewHelper.findViewByName(root, name) ?: return false
+        return applyModuleGravity(module, enabled, horizontal)
+    }
+
+    /**
+     * 对单个原生模块应用锚点；除 [applySide] 的按名查找外，也供内容落地时的
+     * 对唱方向同步直接使用（持模块引用，避免向上遍历找 root 再按名查一遍）。
+     */
+    internal fun applyModuleGravity(module: View, enabled: Boolean, horizontal: Int): Boolean {
         val params = module.layoutParams as? FrameLayout.LayoutParams ?: return false
         val original = if (enabled) {
             originalGravities.getOrPut(module) { params.gravity }
@@ -122,7 +137,7 @@ internal object IslandNativeSlotPlacement {
         module.layoutParams = params
         if (BuildConfig.DEBUG) {
             HookLogger.d("IslandNativeSlotPlacement",
-                "native_anchor name=$name enabled=$enabled gravity=$previous->$expected " +
+                "native_anchor enabled=$enabled gravity=$previous->$expected " +
                     "original=$original module=${module.left},${module.right}/${module.measuredWidth} " +
                     "areaWidth=${(module.parent as? View)?.width} translationX=${module.translationX}")
         }

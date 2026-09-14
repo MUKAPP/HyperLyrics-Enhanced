@@ -49,13 +49,21 @@
             android:configChanges="locale|layoutDirection"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
             </intent-filter>
         </activity>
+
+        <!-- 桌面图标入口：隐藏应用图标时停用此别名，主 Activity 保持可用（磁贴/通知仍可进入应用） -->
+        <activity-alias
+            android:name=".ui.MainLauncherAlias"
+            android:targetActivity=".ui.MainActivity"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name=".service.LiveLyricService"

@@ -155,6 +155,9 @@
     <string name="title_parallel_window_ui">平行窗口UI</string>
     <string name="title_floating_nav">悬浮底栏</string>
     <string name="title_exclude_from_recents">隐藏后台卡片</string>
+    <string name="title_hide_app_icon">隐藏应用图标</string>
+    <string name="title_show_settings_entry">在设置中显示入口</string>
+    <string name="summary_show_settings_entry">需将设置加入作用域</string>
     <string name="title_config_management">配置管理</string>
     <string name="title_backup">备份</string>
     <string name="title_restore">恢复</string>
@@ -267,12 +270,17 @@
     <string name="provider_change_applied">更改已生效，请重启%1$s与系统界面</string>
     <string name="provider_change_applied_system_ui">更改已生效，请重启系统界面</string>
     <string name="provider_error_network">网络请求失败，请检查网络连接后重试</string>
-    <string name="provider_error_http">服务器返回 HTTP %1$s</string>
-    <string name="provider_error_catalog_signature">插件目录签名验证失败，请稍后重试</string>
-    <string name="provider_error_catalog_data">插件目录数据异常，请等待项目仓库修复</string>
+    <string name="provider_error_http">服务器返回 HTTP %1$s（来源：%2$s）</string>
+    <string name="provider_error_catalog_signature">插件目录签名验证未通过（已自动尝试全部下载源），可能是当前网络被劫持或镜像数据不同步，建议切换 Wi-Fi 或移动数据后重试</string>
+    <string name="provider_error_catalog_version">当前版本的 HyperLyrics Enhanced 过旧，无法解析最新插件目录，请先更新 App 到最新版后重试</string>
+    <string name="provider_error_catalog_duplicate">官方插件目录存在重复的插件条目，属于发布数据错误，需项目方修复。请稍后再试；若持续出现，请向我们反馈</string>
+    <string name="provider_error_catalog_target">官方插件目录中的应用包名配置无效，属于发布数据错误，需项目方修复。请稍后再试；若持续出现，请向我们反馈</string>
+    <string name="provider_error_catalog_url">官方插件目录中的插件下载地址无效，属于发布数据错误，需项目方修复。请稍后再试；若持续出现，请向我们反馈</string>
+    <string name="provider_error_catalog_data">官方插件目录数据异常（未知原因）。请先将 HyperLyrics Enhanced 更新到最新版后重试；若仍出现，请向我们反馈</string>
     <string name="provider_error_unavailable">插件文件暂不可用，请等待发布</string>
-    <string name="provider_error_integrity">插件文件校验失败，请重新下载或等待项目仓库修复</string>
+    <string name="provider_error_integrity">插件文件校验未通过，请重新下载；若重复出现请稍后再试或更新 HyperLyrics Enhanced</string>
     <string name="provider_error_incompatible">插件与当前版本不兼容，请更新 HyperLyrics Enhanced</string>
+    <string name="provider_error_unsupported_target">该插件不适用于当前音乐软件，请确认插件与所选应用匹配</string>
     <string name="provider_error_storage">插件文件保存失败，请检查模块权限后重试</string>
     <string name="provider_error_generic">发生未知错误：%1$s</string>
     <string name="title_no_legacy_provider">未发现独立 Provider 模块</string>
@@ -532,8 +540,12 @@
     <!-- ———————————————————————— SuperIslandSettingsPage ———————————————————————— -->
     <string name="title_layout">布局</string>
     <string name="title_content">内容</string>
+    <string name="title_island_dynamic_limit">动态上限调节</string>
+    <string name="summary_island_dynamic_limit">根据状态栏时间的位置，自动调节两侧长度上限；启用时停用自定义长度</string>
     <string name="title_island_dynamic_width">动态长度</string>
     <string name="summary_island_dynamic_width">自动跟随较长一侧收缩，长度上限受下方设定影响</string>
+    <string name="title_island_duet_fixed_length">对唱歌词固定长度</string>
+    <string name="summary_island_duet_fixed_length">开启后取对唱歌词中最长句宽度，该选项可恢复原有的对唱位置</string>
     <string name="title_left_content_width">左侧内容长度</string>
     <string name="title_right_content_width">右侧内容长度</string>
     <string name="label_content_width_range">范围：0 ~ 500</string>
@@ -561,7 +573,9 @@
     <string name="option_audio_cover_style_hidden">隐藏封面</string>
     <string name="title_audio_rhythm">音频律动</string>
     <string name="title_audio_rhythm_cover_color">音频律动封面色</string>
-    <string name="title_audio_rhythm_gradient_color">音频律动封面渐变色</string>
+    <string name="option_music_wave_color_mode_off">不开启</string>
+    <string name="option_music_wave_color_mode_cover">封面色</string>
+    <string name="option_music_wave_color_mode_cover_gradient">封面渐变色</string>
     <string name="title_super_island_left">超级岛左侧</string>
     <string name="title_super_island_right">超级岛右侧</string>
     <string name="option_content_none">无内容</string>

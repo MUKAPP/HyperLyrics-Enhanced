@@ -23,15 +23,20 @@ class OfficialProviderCatalogTest {
     }
 
     @Test
-    fun `merges QQ Music mobile and HD into one provider`() {
+    fun `merges QQ Music mobile and HD and Xiaomi Music into one provider`() {
         val definition = requireNotNull(OfficialProviderCatalog.definitionForId("qqmusic"))
 
         assertEquals(
-            setOf("com.tencent.qqmusic", "com.tencent.qqmusicpad"),
+            setOf(
+                "com.tencent.qqmusic",
+                "com.tencent.qqmusicpad",
+                "com.miui.player",
+            ),
             definition.targetPackages,
         )
         assertEquals("QQ音乐", definition.displayNameForPackage("com.tencent.qqmusic"))
         assertEquals("QQ音乐HD", definition.displayNameForPackage("com.tencent.qqmusicpad"))
+        assertEquals("小米音乐", definition.displayNameForPackage("com.miui.player"))
     }
 
     @Test
@@ -59,6 +64,28 @@ class OfficialProviderCatalogTest {
             OfficialProviderCatalog.shouldLoadIntoProcess(
                 packageName = "com.tencent.qqmusic",
                 processName = "com.tencent.qqmusic:QQPlayerService",
+            )
+        )
+    }
+
+    @Test
+    fun `allows Xiaomi Music main and remote processes`() {
+        assertTrue(
+            OfficialProviderCatalog.shouldLoadIntoProcess(
+                packageName = "com.miui.player",
+                processName = "com.miui.player",
+            )
+        )
+        assertTrue(
+            OfficialProviderCatalog.shouldLoadIntoProcess(
+                packageName = "com.miui.player",
+                processName = "com.miui.player:remote",
+            )
+        )
+        assertFalse(
+            OfficialProviderCatalog.shouldLoadIntoProcess(
+                packageName = "com.miui.player",
+                processName = "com.miui.player:pushservice",
             )
         )
     }

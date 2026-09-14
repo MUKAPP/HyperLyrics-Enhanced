@@ -154,6 +154,9 @@
     <string name="title_parallel_window_ui">Parallel Window UI</string>
     <string name="title_floating_nav">Floating Navigation Bar</string>
     <string name="title_exclude_from_recents">Hide from Recents</string>
+    <string name="title_hide_app_icon">Hide App Icon</string>
+    <string name="title_show_settings_entry">Show Entry in Settings</string>
+    <string name="summary_show_settings_entry">Requires the Settings app in module scope</string>
     <string name="title_config_management">Configuration Management</string>
     <string name="title_backup">Backup</string>
     <string name="title_restore">Restore</string>
@@ -266,12 +269,17 @@
     <string name="provider_change_applied">Change applied. Restart %1$s and System UI.</string>
     <string name="provider_change_applied_system_ui">Change applied. Restart System UI.</string>
     <string name="provider_error_network">Network request failed. Check your connection and try again.</string>
-    <string name="provider_error_http">The server returned HTTP %1$s</string>
-    <string name="provider_error_catalog_signature">Plugin catalog signature verification failed. Try again later.</string>
-    <string name="provider_error_catalog_data">The plugin catalog data is invalid. Please wait for a repository fix.</string>
+    <string name="provider_error_http">The server returned HTTP %1$s (from %2$s)</string>
+    <string name="provider_error_catalog_signature">Plugin catalog signature verification failed on every download source. Your network may be hijacked or a mirror is out of sync; try switching between Wi-Fi and mobile data.</string>
+    <string name="provider_error_catalog_version">Your HyperLyrics Enhanced version is outdated and cannot parse the latest plugin catalog. Update the app to the latest version first.</string>
+    <string name="provider_error_catalog_duplicate">The official plugin catalog contains duplicate entries. This is a publishing-data error on our side; please try again later and report it to us if it persists.</string>
+    <string name="provider_error_catalog_target">The official plugin catalog has invalid app package-name settings. This is a publishing-data error on our side; please try again later and report it to us if it persists.</string>
+    <string name="provider_error_catalog_url">The download URL in the official plugin catalog is invalid. This is a publishing-data error on our side; please try again later and report it to us if it persists.</string>
+    <string name="provider_error_catalog_data">The official plugin catalog data is invalid (unknown cause). Update HyperLyrics Enhanced and try again; if it still occurs, report it to us.</string>
     <string name="provider_error_unavailable">The plugin file is temporarily unavailable. Please wait for its release.</string>
-    <string name="provider_error_integrity">Plugin file verification failed. Download it again or wait for a repository fix.</string>
+    <string name="provider_error_integrity">Plugin file verification failed. Download it again; if it keeps failing, try again later or update HyperLyrics Enhanced.</string>
     <string name="provider_error_incompatible">This plugin is incompatible with the current version. Update HyperLyrics Enhanced.</string>
+    <string name="provider_error_unsupported_target">This plugin does not support the current music app.</string>
     <string name="provider_error_storage">Failed to save the plugin file. Check module permissions and try again.</string>
     <string name="provider_error_generic">Unknown error: %1$s</string>
     <string name="title_no_legacy_provider">No standalone Provider modules found</string>
@@ -530,8 +538,12 @@
     <!-- ———————————————————————— SuperIslandSettingsPage ———————————————————————— -->
     <string name="title_layout">Layout</string>
     <string name="title_content">Content</string>
+    <string name="title_island_dynamic_limit">Dynamic Width Limit</string>
+    <string name="summary_island_dynamic_limit">Automatically limit both sides using the status bar clock position. Custom lengths are disabled while enabled.</string>
     <string name="title_island_dynamic_width">Dynamic Width</string>
     <string name="summary_island_dynamic_width">Automatically shrinks to follow the longer side; the length cap follows the settings below</string>
+    <string name="title_island_duet_fixed_length">Duet Lyrics Fixed Length</string>
+    <string name="summary_island_duet_fixed_length">Use the width of the longest duet line; restores the original duet positioning</string>
     <string name="title_left_content_width">Left Content Width</string>
     <string name="title_right_content_width">Right Content Width</string>
     <string name="label_content_width_range">Range: 0 ~ 500</string>
@@ -559,7 +571,9 @@
     <string name="option_audio_cover_style_hidden">Hide cover</string>
     <string name="title_audio_rhythm">Audio Rhythm</string>
     <string name="title_audio_rhythm_cover_color">Audio rhythm cover color</string>
-    <string name="title_audio_rhythm_gradient_color">Audio rhythm cover gradient</string>
+    <string name="option_music_wave_color_mode_off">Off</string>
+    <string name="option_music_wave_color_mode_cover">Cover color</string>
+    <string name="option_music_wave_color_mode_cover_gradient">Cover gradient</string>
     <string name="title_super_island_left">HyperIsland Left</string>
     <string name="title_super_island_right">HyperIsland Right</string>
     <string name="option_content_none">None</string>

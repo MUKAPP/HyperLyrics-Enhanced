@@ -19,6 +19,8 @@ internal object IslandRuntimePreferenceOverrides {
         }
     }
 
+    fun contains(key: String): Boolean = values.containsKey(key)
+
     fun getInt(key: String, fallback: Int): Int = values[key] as? Int ?: fallback
 
     fun getBoolean(key: String, fallback: Boolean): Boolean =
