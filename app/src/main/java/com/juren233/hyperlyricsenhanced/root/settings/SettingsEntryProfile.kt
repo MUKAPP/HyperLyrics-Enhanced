@@ -49,6 +49,37 @@ object SettingsEntryProfile {
     /** 入口落点的锚点 header id 资源名，按优先级排列，插在首个命中的锚点之后。 */
     val ANCHOR_HEADER_IDS = listOf("my_device", "launcher_settings", "app_timer")
 
+    // 2026-09-15 对照同一设置 APK 补充核实（aapt2 resources dump + res/xml/settings_headers + values-zh-rCN）：
+    // - id/personalize_title = 0x7f0b0aea，条目标题 @string/system_personalize_title = "系统个性化"，
+    //   intent 指向 thememanager；updateHeaderList 仅在国际版/PC 模式移除该 header；
+    // - id/other_advanced_settings = 0x7f0b0a7f，条目标题 @string/other_advanced_settings = "更多设置"，
+    //   fragment com.android.settings.personal.OtherPersonalSettings。
+    /** "中部"锚点：插在"系统个性化"条目之后。 */
+    val MIDDLE_ANCHOR_HEADER_IDS = listOf("personalize_title")
+    /** "底部"锚点：插在"更多设置"条目之前。 */
+    val BOTTOM_ANCHOR_HEADER_IDS = listOf("other_advanced_settings")
+
+    /** "在设置中显示入口"的位置模式；模块内下拉选项顺序与取值一一对应。 */
+    const val POSITION_HIDDEN = 0
+    const val POSITION_TOP = 1
+    const val POSITION_MIDDLE = 2
+    const val POSITION_BOTTOM = 3
+
+    /**
+     * 解析入口位置模式。新 int key（key_settings_entry_position）优先；
+     * 未写入时按旧布尔 key（key_show_settings_entry）迁移：false → 不显示，true/缺失 → 顶部。
+     */
+    fun resolveEntryPosition(
+        positionExists: Boolean,
+        positionValue: Int,
+        legacyShowEntryExists: Boolean,
+        legacyShowEntry: Boolean,
+    ): Int = when {
+        positionExists -> positionValue.coerceIn(POSITION_HIDDEN, POSITION_BOTTOM)
+        legacyShowEntryExists && !legacyShowEntry -> POSITION_HIDDEN
+        else -> POSITION_TOP
+    }
+
     fun isUpdateHeaderListTarget(name: String, parameterTypeNames: List<String>): Boolean =
         name == UPDATE_HEADER_LIST_METHOD && parameterTypeNames == listOf("java.util.List")
 
@@ -65,8 +96,25 @@ object SettingsEntryProfile {
         return -1
     }
 
+    /** 返回插在首个命中锚点之前的位置；未命中任何锚点时返回 -1，0 值锚点视为未解析并跳过。 */
+    fun findInsertBeforePosition(headerIds: List<Long>, anchorIds: List<Long>): Int {
+        anchorIds.filter { it != 0L }.forEach { anchor ->
+            val index = headerIds.indexOf(anchor)
+            if (index >= 0) return index
+        }
+        return -1
+    }
+
     /** 与 HyperCeiler 一致的兜底位置：列表前 25 项内追加，分组继承由调用方处理。 */
     fun fallbackInsertPosition(headerCount: Int): Int = minOf(25, headerCount)
 
-    fun groupSourceIndex(insertPosition: Int): Int = if (insertPosition > 0) insertPosition - 1 else 0
+    /**
+     * 分组继承来源：插在锚点之后继承上一项；插在锚点之前继承锚点自身（保证与锚点同组）。
+     * 调用方需保证 headers 非空且 insertBefore 时锚点仍在 insertPosition 处。
+     */
+    fun groupSourceIndex(insertPosition: Int, insertBeforeAnchor: Boolean = false): Int = when {
+        insertPosition <= 0 -> 0
+        insertBeforeAnchor -> insertPosition
+        else -> insertPosition - 1
+    }
 }

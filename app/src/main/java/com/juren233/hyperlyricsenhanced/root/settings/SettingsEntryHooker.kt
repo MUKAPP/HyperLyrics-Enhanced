@@ -26,8 +26,11 @@ import io.github.libxposed.api.XposedInterface.Hooker
 /**
  * 在 HyperOS 系统设置首页（MiuiSettings header 列表）注入 HyperLyrics 入口。
  *
- * 仅当"隐藏应用图标"开启且"在手机设置中显示入口"开启时注入；任一关闭则把入口从
- * 列表移除（或不再插入）。入口 intent 直指 MainActivity：图标隐藏只停用启动器别名，
+ * 仅当"隐藏应用图标"开启时注入；"在设置中显示入口"为位置下拉（不显示/顶部/中部/底部），
+ * 由 [SettingsEntryProfile.resolveEntryPosition] 解析（含旧布尔 key 迁移），"不显示"时把
+ * 入口从列表移除（或不再插入）。顶部插在 my_device 等锚点之后，中部插在"系统个性化"
+ * （personalize_title）之后，底部插在"更多设置"（other_advanced_settings）之前。
+ * 入口 intent 直指 MainActivity：图标隐藏只停用启动器别名，
  * 主 Activity 始终可用，因此入口恰好在桌面图标消失的时间窗内可用。
  *
  * 图标不写入 iconRes、也不向设置进程挂载任何模块资源：
@@ -99,7 +102,18 @@ object SettingsEntryHooker {
 
         private fun entryVisible(): Boolean =
             prefs.getBoolean(UIConstants.KEY_HIDE_APP_ICON, UIConstants.DEFAULT_HIDE_APP_ICON) &&
-                prefs.getBoolean(UIConstants.KEY_SHOW_SETTINGS_ENTRY, UIConstants.DEFAULT_SHOW_SETTINGS_ENTRY)
+                resolveEntryPosition() != SettingsEntryProfile.POSITION_HIDDEN
+
+        /** 位置模式：新 int key 优先，缺失时从旧布尔 key 迁移（false=不显示，true/缺失=顶部）。 */
+        private fun resolveEntryPosition(): Int = SettingsEntryProfile.resolveEntryPosition(
+            positionExists = prefs.contains(UIConstants.KEY_SETTINGS_ENTRY_POSITION),
+            positionValue = prefs.getInt(UIConstants.KEY_SETTINGS_ENTRY_POSITION, 0),
+            legacyShowEntryExists = prefs.contains(UIConstants.KEY_SHOW_SETTINGS_ENTRY),
+            legacyShowEntry = prefs.getBoolean(UIConstants.KEY_SHOW_SETTINGS_ENTRY, UIConstants.DEFAULT_SHOW_SETTINGS_ENTRY),
+        )
+
+        private fun resolveAnchorId(activity: Activity, name: String): Long =
+            activity.resources.getIdentifier(name, "id", SettingsEntryProfile.SETTINGS_PACKAGE).toLong()
 
         override fun intercept(chain: Chain): Any? {
             val result = chain.proceed()
@@ -113,7 +127,7 @@ object SettingsEntryHooker {
             return result
         }
 
-        /** updateHeaderList 之后：按开关状态插入或移除入口 Header。 */
+        /** updateHeaderList 之后：先移除既有入口，再按位置模式重新插入或保持移除。 */
         private fun applyEntryList(chain: Chain) {
             val activity = chain.thisObject as? Activity ?: return
             val headers = chain.args.firstOrNull() as? MutableList<Any> ?: return
@@ -121,25 +135,51 @@ object SettingsEntryHooker {
             val ids = ArrayList<Long>(headers.size)
             headers.forEach { ids.add(idField.getLong(it)) }
             val existingIndex = ids.indexOf(SettingsEntryProfile.ENTRY_HEADER_ID)
+            if (existingIndex >= 0) headers.removeAt(existingIndex)
 
-            if (!entryVisible()) {
-                if (existingIndex >= 0) headers.removeAt(existingIndex)
-                return
-            }
-            if (existingIndex >= 0) return
+            val mode = resolveEntryPosition()
+            if (!entryVisible()) return
 
             val header = createHeader(activity) ?: return
-            val anchorIds = SettingsEntryProfile.ANCHOR_HEADER_IDS.map {
-                activity.resources.getIdentifier(it, "id", SettingsEntryProfile.SETTINGS_PACKAGE).toLong()
+            val placement = when (mode) {
+                SettingsEntryProfile.POSITION_BOTTOM -> bottomPlacement(activity, ids)
+                SettingsEntryProfile.POSITION_MIDDLE -> Placement(middleInsertPosition(activity, ids))
+                else -> Placement(topInsertPosition(activity, ids))
             }
-            val position = SettingsEntryProfile.findInsertPosition(ids, anchorIds)
-                .takeIf { it >= 0 }
-                ?: SettingsEntryProfile.fallbackInsertPosition(headers.size)
             if (headers.isNotEmpty()) {
-                setGroupField(activity, header, headers[SettingsEntryProfile.groupSourceIndex(position)])
+                setGroupField(
+                    activity,
+                    header,
+                    headers[SettingsEntryProfile.groupSourceIndex(placement.position, placement.insertBeforeAnchor)],
+                )
             }
-            headers.add(position, header)
-            HookLogger.i(TAG, "设置首页入口已注入: position=$position")
+            headers.add(placement.position, header)
+            HookLogger.i(TAG, "设置首页入口已注入: mode=$mode position=${placement.position}")
+        }
+
+        private data class Placement(val position: Int, val insertBeforeAnchor: Boolean = false)
+
+        /** 顶部锚点命中位置；完全未命中时使用 HyperCeiler 同款前 25 项兜底。 */
+        private fun topInsertPosition(activity: Activity, ids: List<Long>): Int {
+            val anchorIds = SettingsEntryProfile.ANCHOR_HEADER_IDS.map { resolveAnchorId(activity, it) }
+            return SettingsEntryProfile.findInsertPosition(ids, anchorIds)
+                .takeIf { it >= 0 }
+                ?: SettingsEntryProfile.fallbackInsertPosition(ids.size)
+        }
+
+        /** 中部锚点（"系统个性化"之后）未命中时回落到顶部锚点。 */
+        private fun middleInsertPosition(activity: Activity, ids: List<Long>): Int {
+            val anchorIds = SettingsEntryProfile.MIDDLE_ANCHOR_HEADER_IDS.map { resolveAnchorId(activity, it) }
+            return SettingsEntryProfile.findInsertPosition(ids, anchorIds)
+                .takeIf { it >= 0 }
+                ?: topInsertPosition(activity, ids)
+        }
+
+        /** 底部锚点（"更多设置"之前）未命中时兜底追加到列表末尾。 */
+        private fun bottomPlacement(activity: Activity, ids: List<Long>): Placement {
+            val anchorIds = SettingsEntryProfile.BOTTOM_ANCHOR_HEADER_IDS.map { resolveAnchorId(activity, it) }
+            val position = SettingsEntryProfile.findInsertBeforePosition(ids, anchorIds)
+            return if (position >= 0) Placement(position, insertBeforeAnchor = true) else Placement(ids.size)
         }
 
         private fun setGroupField(activity: Activity, header: Any, adjacent: Any) {

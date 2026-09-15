@@ -15,6 +15,7 @@ object UIConstants {
     const val KEY_EXCLUDE_FROM_RECENTS = "key_exclude_from_recents"
     const val KEY_HIDE_APP_ICON = "key_hide_app_icon"
     const val KEY_SHOW_SETTINGS_ENTRY = "key_show_settings_entry"
+    const val KEY_SETTINGS_ENTRY_POSITION = "key_settings_entry_position"
     const val KEY_LOG_LEVEL = "key_log_level"
     const val KEY_LOG_LEVEL_BUILD_KIND = "key_log_level_build_kind"
     const val KEY_LAST_SEEN_VERSION = "key_last_seen_version"

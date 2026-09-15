@@ -157,6 +157,10 @@
     <string name="title_hide_app_icon">Hide App Icon</string>
     <string name="title_show_settings_entry">Show Entry in Settings</string>
     <string name="summary_show_settings_entry">Requires the Settings app in module scope</string>
+    <string name="settings_entry_position_hidden">Don\'t Show</string>
+    <string name="settings_entry_position_top">Top</string>
+    <string name="settings_entry_position_middle">Middle</string>
+    <string name="settings_entry_position_bottom">Bottom</string>
     <string name="title_config_management">Configuration Management</string>
     <string name="title_backup">Backup</string>
     <string name="title_restore">Restore</string>

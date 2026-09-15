@@ -37,6 +37,7 @@ import com.juren233.hyperlyricsenhanced.R
 import com.juren233.hyperlyricsenhanced.common.LogLevelPolicy
 import com.juren233.hyperlyricsenhanced.common.PrefsBridge
 import com.juren233.hyperlyricsenhanced.common.UIConstants
+import com.juren233.hyperlyricsenhanced.root.settings.SettingsEntryProfile
 import com.juren233.hyperlyricsenhanced.ui.navigation.LocalNavigator
 import com.juren233.hyperlyricsenhanced.ui.navigation.Route
 import com.juren233.hyperlyricsenhanced.ui.utils.AppUtils
@@ -300,12 +301,31 @@ private fun LazyListScope.settingsSections(
                     enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
                     exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
                 ) {
-                    var showSettingsEntry by remember { mutableStateOf(prefs.getBoolean(UIConstants.KEY_SHOW_SETTINGS_ENTRY, UIConstants.DEFAULT_SHOW_SETTINGS_ENTRY)) }
-                    SwitchPreference(
+                    var settingsEntryPosition by remember {
+                        mutableStateOf(
+                            SettingsEntryProfile.resolveEntryPosition(
+                                positionExists = prefs.contains(UIConstants.KEY_SETTINGS_ENTRY_POSITION),
+                                positionValue = prefs.getInt(UIConstants.KEY_SETTINGS_ENTRY_POSITION, 0),
+                                legacyShowEntryExists = prefs.contains(UIConstants.KEY_SHOW_SETTINGS_ENTRY),
+                                legacyShowEntry = prefs.getBoolean(UIConstants.KEY_SHOW_SETTINGS_ENTRY, UIConstants.DEFAULT_SHOW_SETTINGS_ENTRY),
+                            )
+                        )
+                    }
+                    val settingsEntryPositionOptions = listOf(
+                        stringResource(R.string.settings_entry_position_hidden),
+                        stringResource(R.string.settings_entry_position_top),
+                        stringResource(R.string.settings_entry_position_middle),
+                        stringResource(R.string.settings_entry_position_bottom),
+                    )
+                    WindowDropdownPreference(
                         title = stringResource(R.string.title_show_settings_entry),
                         summary = stringResource(R.string.summary_show_settings_entry),
-                        checked = showSettingsEntry,
-                        onCheckedChange = { showSettingsEntry = it; PrefsBridge.putBoolean(UIConstants.KEY_SHOW_SETTINGS_ENTRY, it) },
+                        items = settingsEntryPositionOptions,
+                        selectedIndex = settingsEntryPosition,
+                        onSelectedIndexChange = {
+                            settingsEntryPosition = it
+                            PrefsBridge.putInt(UIConstants.KEY_SETTINGS_ENTRY_POSITION, it)
+                        },
                     )
                 }
             }

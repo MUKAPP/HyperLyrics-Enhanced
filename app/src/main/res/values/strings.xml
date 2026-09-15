@@ -158,6 +158,10 @@
     <string name="title_hide_app_icon">隐藏应用图标</string>
     <string name="title_show_settings_entry">在设置中显示入口</string>
     <string name="summary_show_settings_entry">需将设置加入作用域</string>
+    <string name="settings_entry_position_hidden">不显示</string>
+    <string name="settings_entry_position_top">顶部</string>
+    <string name="settings_entry_position_middle">中部</string>
+    <string name="settings_entry_position_bottom">底部</string>
     <string name="title_config_management">配置管理</string>
     <string name="title_backup">备份</string>
     <string name="title_restore">恢复</string>
