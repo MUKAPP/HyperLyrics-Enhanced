@@ -98,6 +98,9 @@ object NotificationMediaAodLyricHooker {
     private val hookedAodPluginClassLoaders = Collections.synchronizedSet(
         Collections.newSetFromMap(WeakHashMap<ClassLoader, Boolean>())
     )
+    private val firstAodPluginCallbackClasses = Collections.synchronizedSet(
+        Collections.newSetFromMap(WeakHashMap<Class<*>, Boolean>())
+    )
     internal val states = Collections.synchronizedMap(WeakHashMap<Any, ControllerState>())
     internal val aodPluginStates = Collections.synchronizedMap(
         WeakHashMap<Any, AodPluginState>()
@@ -221,7 +224,19 @@ object NotificationMediaAodLyricHooker {
 
     fun hookAodPlugin(xposedModule: XposedModule, classLoader: ClassLoader) {
         initialize(xposedModule)
-        val api = runCatching { AodPluginApi.create(classLoader) }.getOrNull() ?: return
+        val aodViewClass = try {
+            classLoader.loadClass(AOD_PLUGIN_VIEW_CLASS)
+        } catch (_: ClassNotFoundException) {
+            return
+        } catch (error: Throwable) {
+            HookLogger.w(TAG, "加载通知图标式息屏歌词宿主失败: reason=${error.message}")
+            return
+        }
+        val api = runCatching { AodPluginApi.create(aodViewClass) }
+            .onFailure {
+                HookLogger.w(TAG, "通知图标式息屏歌词契约不兼容: reason=${it.message}")
+            }
+            .getOrNull() ?: return
         if (!hookedAodPluginClassLoaders.add(classLoader)) return
 
         var installedCount = 0
@@ -238,7 +253,11 @@ object NotificationMediaAodLyricHooker {
         }
         if (installedCount == api.hookMethods.size) {
             aodPluginApis[classLoader] = api
-            HookLogger.i(TAG, "通知图标式息屏歌词 Hook 已初始化: methods=$installedCount")
+            HookLogger.i(
+                TAG,
+                "通知图标式息屏歌词 Hook 已初始化: methods=$installedCount, " +
+                    api.hookResolutionSummary,
+            )
         } else {
             hookedAodPluginClassLoaders.remove(classLoader)
             HookLogger.w(TAG, "通知图标式息屏歌词 Hook 安装不完整")
@@ -280,12 +299,7 @@ object NotificationMediaAodLyricHooker {
                 "onFullAodStateChanged" -> method.parameterCount == 1
                 else -> false
             }
-            AOD_PLUGIN_VIEW_CLASS -> when (method.name) {
-                "makeNormalPanel", "onAttachedToWindow", "onDetachedFromWindow",
-                "onUpdatePositionTimer" -> method.parameterCount == 0
-                "onAodContentLayoutChange" -> method.parameterCount == 3
-                else -> false
-            }
+            AOD_PLUGIN_VIEW_CLASS -> AodPluginMethodProfile.isSupportedHook(method)
             else -> false
         }
     }
@@ -295,7 +309,7 @@ object NotificationMediaAodLyricHooker {
         if (!isTargetMethod(method)) return null
         return when (method.declaringClass.name) {
             VIEW_CONTROLLER_CLASS -> ControllerHook(method.name)
-            AOD_PLUGIN_VIEW_CLASS -> AodPluginHook(method.name)
+            AOD_PLUGIN_VIEW_CLASS -> AodPluginHook(method)
             else -> null
         }
     }
@@ -341,6 +355,7 @@ object NotificationMediaAodLyricHooker {
         nativeApis.clear()
         aodPluginApis.clear()
         dozeRefreshApis.clear()
+        firstAodPluginCallbackClasses.clear()
         mainHandler.removeCallbacks(positionPollRunnable)
         positionPollScheduled = false
     }
@@ -464,9 +479,17 @@ object NotificationMediaAodLyricHooker {
         }
     }
 
-    private class AodPluginHook(private val methodName: String) : Hooker {
+    private class AodPluginHook(private val method: Method) : Hooker {
         override fun intercept(chain: Chain): Any? {
             val aodView = chain.thisObject ?: return chain.proceed()
+            val methodName = method.name
+            if (BuildConfig.DEBUG && firstAodPluginCallbackClasses.add(aodView.javaClass)) {
+                HookLogger.i(
+                    TAG,
+                    "通知图标式息屏歌词首次回调: " +
+                        AodPluginMethodProfile.descriptor(method),
+                )
+            }
             if (methodName == "onDetachedFromWindow") {
                 aodPluginStates.remove(aodView)?.let(::removeAodPluginOverlay)
                 DisplayDiagnosticLogger.clear("AOD_CLASSIC")

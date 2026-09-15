@@ -39,7 +39,13 @@ internal class SpaceGateScrollTextRenderer : LineRenderer {
 
     var typefaceSelector: ((Char) -> Typeface)? = null
 
+    /** 分离模式挖孔布局；null 表示未挖孔，条带连续。 */
+    var gateSplit: GateSplitLayout? = null
+
     val scrollProgress get() = currentUnitOffset
+
+    private fun contentWidthOf(model: LyricModel): Float =
+        gateSplit?.holedWidth ?: model.width
 
     var isRunning = false
     var isPendingDelay = false
@@ -64,7 +70,8 @@ internal class SpaceGateScrollTextRenderer : LineRenderer {
         if (finished) return false
 
         val vw = viewWidth.toFloat()
-        if (model.width <= vw) {
+        val contentWidth = contentWidthOf(model)
+        if (contentWidth <= vw) {
             state.scrollOffset = 0f
             state.isScrollFinished = true
             markFinished(state)
@@ -84,14 +91,14 @@ internal class SpaceGateScrollTextRenderer : LineRenderer {
 
         if (!isRunning) return false
 
-        val unit = model.width + ghostSpacing
+        val unit = contentWidth + ghostSpacing
         val deltaPx = scrollSpeed * (deltaNanos / 1_000_000f)
         currentUnitOffset += deltaPx
 
         val isLastRepeat = repeatCount > 0 && (currentRepeat + 1) >= repeatCount
 
         if (stopAtEnd && isLastRepeat) {
-            val targetStopOffset = model.width - vw
+            val targetStopOffset = contentWidth - vw
             if (currentUnitOffset >= targetStopOffset) {
                 currentUnitOffset = targetStopOffset
                 state.scrollOffset = -targetStopOffset
@@ -132,8 +139,9 @@ internal class SpaceGateScrollTextRenderer : LineRenderer {
         viewHeight: Int
     ) {
         val vw = viewWidth.toFloat()
+        val contentWidth = contentWidthOf(model)
         val offset = resolvePlainTextOffset(
-            model.width,
+            contentWidth,
             vw,
             state.scrollOffset,
             model.isAlignedRight,
@@ -147,31 +155,68 @@ internal class SpaceGateScrollTextRenderer : LineRenderer {
             cachedViewHeight = viewHeight
         }
 
-        val selector = typefaceSelector
-        if (offset < vw && offset + model.width > 0) {
-            canvas.withTranslation(x = offset) {
-                if (selector != null) {
-                    MixedTypefaceText.drawText(canvas, model.text, 0f, cachedBaseline, paint, selector)
-                } else {
-                    drawText(model.text, 0f, cachedBaseline, paint)
-                }
-            }
+        val visible = offset < vw && offset + contentWidth > 0
+        if (visible) {
+            drawStrip(canvas, model, paint, offset)
         }
 
         // Space gate doesn't loop ghost texts across the portal, but keep it for normal marquee
-        if (model.width > vw) {
-            val rightEdge = offset + model.width
+        if (contentWidth > vw) {
+            val rightEdge = offset + contentWidth
             if (rightEdge < vw) {
                 val ghostX = rightEdge + ghostSpacing
                 if (ghostX < vw) {
-                    canvas.withTranslation(x = ghostX) {
-                        if (selector != null) {
-                            MixedTypefaceText.drawText(canvas, model.text, 0f, cachedBaseline, paint, selector)
-                        } else {
-                            drawText(model.text, 0f, cachedBaseline, paint)
-                        }
-                    }
+                    drawStrip(canvas, model, paint, ghostX)
                 }
+            }
+        }
+    }
+
+    /** 挖孔时按字符边界拆两段绘制，后段从 [GateSplitLayout.runBStripStart] 起笔。 */
+    private fun drawStrip(
+        canvas: Canvas,
+        model: LyricModel,
+        paint: TextPaint,
+        startX: Float
+    ) {
+        val split = gateSplit
+        val selector = typefaceSelector
+        if (split == null || split.holeWidth <= 0f || split.splitCharIndex <= 0) {
+            val text = model.text
+            if (text.isEmpty()) return
+            canvas.withTranslation(x = startX) {
+                if (selector != null) {
+                    MixedTypefaceText.drawText(canvas, text, 0f, cachedBaseline, paint, selector)
+                } else {
+                    drawText(text, 0f, cachedBaseline, paint)
+                }
+            }
+            return
+        }
+        val k = split.splitCharIndex.coerceIn(0, model.text.length)
+        canvas.withTranslation(x = startX) {
+            drawRun(canvas, model.text, 0, k, 0f, paint, selector)
+        }
+        canvas.withTranslation(x = startX) {
+            drawRun(canvas, model.text, k, model.text.length, split.runBStripStart - split.runAWidth, paint, selector)
+        }
+    }
+
+    private fun drawRun(
+        canvas: Canvas,
+        text: String,
+        start: Int,
+        end: Int,
+        extraShift: Float,
+        paint: TextPaint,
+        selector: ((Char) -> Typeface)?
+    ) {
+        if (end <= start) return
+        canvas.withTranslation(x = extraShift) {
+            if (selector != null) {
+                MixedTypefaceText.drawText(canvas, text.substring(start, end), 0f, cachedBaseline, paint, selector)
+            } else {
+                drawText(text, start, end, 0f, cachedBaseline, paint)
             }
         }
     }

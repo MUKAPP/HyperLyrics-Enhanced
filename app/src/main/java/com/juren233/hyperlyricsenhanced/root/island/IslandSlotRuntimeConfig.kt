@@ -74,15 +74,17 @@ internal data class IslandSlotRuntimeConfig(
         get() = translationDisplayMode != RootConstants.TRANSLATION_PRONUNCIATION_DISPLAY_OFF
 
     val isSplitMode: Boolean
-        get() = activeMode == 1
+        get() = activeMode == RootConstants.HOOK_LYRIC_MODE_SPLIT
 
     fun lyricPosition(isLeft: Boolean): Int = if (isLeft) leftLyricPosition else rightLyricPosition
 
+    // 分离模式两槽是同一条文本带，两侧位置显示整体按默认处理：
+    // 任意一侧被居中/靠右偏好单独挪动都会撕开拼接视口。
     fun centerLyric(isLeft: Boolean): Boolean =
-        IslandLyricPosition.centers(lyricPosition(isLeft))
+        !isSplitMode && IslandLyricPosition.centers(lyricPosition(isLeft))
 
     fun rightAlignLyric(isLeft: Boolean): Boolean =
-        IslandLyricPosition.alignsRight(lyricPosition(isLeft))
+        !isSplitMode && IslandLyricPosition.alignsRight(lyricPosition(isLeft))
 
     /**
      * Horizontal placement for content-width slots. Apply this at both the
@@ -105,6 +107,9 @@ internal data class IslandSlotRuntimeConfig(
      */
     fun wrapperHorizontalGravity(isLeft: Boolean, duetLineAlignedRight: Boolean?): Int {
         val base = wrapperHorizontalGravity(isLeft)
+        // 分离模式两槽共享同一条文本带，任一侧 wrapper 被对唱锚点单独挪动
+        // 都会让两个视口错位；对唱方向交给行级 isAlignedRight 在带内表达。
+        if (isSplitMode) return base
         if (duetLineAlignedRight != true || !dynamicWidthEnabled) return base
         if (centerLyric(isLeft) || rightAlignLyric(isLeft)) return base
         val isLyricSlot = (if (isLeft) leftMode else rightMode) == 7

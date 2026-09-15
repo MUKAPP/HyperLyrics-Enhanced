@@ -13,7 +13,7 @@ import java.lang.ref.WeakReference
 /** Placement of the native module in the area, not text alignment inside our wrapper. */
 internal object IslandNativeSlotPlacement {
     private val originalGravities = WeakHashMap<View, Int>()
-    private val rhythmAnchors = WeakHashMap<ViewGroup, RhythmAnchor>()
+    private val iconAnchors = WeakHashMap<ViewGroup, NativeIconAnchor>()
 
     fun apply(
         root: ViewGroup,
@@ -21,31 +21,50 @@ internal object IslandNativeSlotPlacement {
         leftDuetAlignedRight: Boolean? = null,
         rightDuetAlignedRight: Boolean? = null,
     ): Boolean {
+        // Album art and rhythm share their native WRAP_CONTENT modules with the text slot.
+        // Capture the native module gravity before applying the text placement so each icon
+        // can stay at its original edge while only the content follows CENTER/END.
+        val album = preserveNativeIconAnchor(
+            root = root,
+            moduleName = IslandProbeUtils.LEFT_PARENT_NAME,
+            enabled = config.dynamicWidthEnabled && config.shouldInjectLeft && config.showAlbum,
+            diagnosticName = "album",
+        )
+        val rhythm = preserveNativeIconAnchor(
+            root = root,
+            moduleName = IslandProbeUtils.RIGHT_PARENT_NAME,
+            enabled = config.dynamicWidthEnabled && config.shouldInjectRight && config.showRhythm,
+            diagnosticName = "rhythm",
+        )
         val left = applySide(root, IslandProbeUtils.LEFT_PARENT_NAME,
             config.dynamicWidthEnabled && config.shouldInjectLeft,
             config.wrapperHorizontalGravity(true, leftDuetAlignedRight))
         val right = applySide(root, IslandProbeUtils.RIGHT_PARENT_NAME,
             config.dynamicWidthEnabled && config.shouldInjectRight,
             config.wrapperHorizontalGravity(false, rightDuetAlignedRight))
-        val rhythm = preserveRhythmAnchor(root,
-            config.dynamicWidthEnabled && config.shouldInjectRight && config.showRhythm)
-        return left || right || rhythm
+        return left || right || album || rhythm
     }
 
     fun restore(root: ViewGroup) {
-        preserveRhythmAnchor(root, false)
+        preserveNativeIconAnchor(root, IslandProbeUtils.LEFT_PARENT_NAME, false, "album")
+        preserveNativeIconAnchor(root, IslandProbeUtils.RIGHT_PARENT_NAME, false, "rhythm")
         applySide(root, IslandProbeUtils.LEFT_PARENT_NAME, false, Gravity.START)
         applySide(root, IslandProbeUtils.RIGHT_PARENT_NAME, false, Gravity.START)
     }
 
-    private fun preserveRhythmAnchor(root: ViewGroup, enabled: Boolean): Boolean {
-        val module = IslandViewHelper.findViewByName(root, IslandProbeUtils.RIGHT_PARENT_NAME)
+    private fun preserveNativeIconAnchor(
+        root: ViewGroup,
+        moduleName: String,
+        enabled: Boolean,
+        diagnosticName: String,
+    ): Boolean {
+        val module = IslandViewHelper.findViewByName(root, moduleName)
             as? ViewGroup ?: return false
-        val previous = rhythmAnchors[module]
+        val previous = iconAnchors[module]
         if (!enabled) {
             previous ?: return false
             previous.restore(module)
-            rhythmAnchors.remove(module)
+            iconAnchors.remove(module)
             return true
         }
         val area = module.parent as? ViewGroup ?: return false
@@ -59,8 +78,13 @@ internal object IslandNativeSlotPlacement {
             return false
         }
         previous?.restore(module)
-        val state = RhythmAnchor(module, area, icon)
-        rhythmAnchors[module] = state
+        val currentGravity = (module.layoutParams as? FrameLayout.LayoutParams)?.gravity
+            ?: return false
+        // A native rebind can replace the icon View while keeping the already re-anchored
+        // module. In that case the gravity map still owns the true pre-injection value.
+        val originalGravity = originalGravities[module] ?: currentGravity
+        val state = NativeIconAnchor(module, area, icon, originalGravity, diagnosticName)
+        iconAnchors[module] = state
         module.clipChildren = false
         module.clipToPadding = false
         module.addOnLayoutChangeListener(state.listener)
@@ -69,7 +93,13 @@ internal object IslandNativeSlotPlacement {
         return true
     }
 
-    private class RhythmAnchor(module: ViewGroup, areaView: ViewGroup, iconView: View) {
+    private class NativeIconAnchor(
+        module: ViewGroup,
+        areaView: ViewGroup,
+        iconView: View,
+        private val originalGravity: Int,
+        private val diagnosticName: String,
+    ) {
         val area = WeakReference(areaView)
         val icon = WeakReference(iconView)
         private val originalTranslation = iconView.translationX
@@ -86,15 +116,16 @@ internal object IslandNativeSlotPlacement {
             val iconView = icon.get() ?: return
             if (module.width <= 0 || areaView.width <= 0) return
             val params = module.layoutParams as? FrameLayout.LayoutParams ?: return
-            val offset = rhythmOffset(areaView.width, areaView.paddingLeft, areaView.paddingRight,
+            val offset = nativeIconOffset(areaView.width, areaView.paddingLeft, areaView.paddingRight,
                 params.leftMargin, params.rightMargin, module.left, module.width,
-                module.layoutDirection == View.LAYOUT_DIRECTION_RTL)
+                originalGravity, module.layoutDirection == View.LAYOUT_DIRECTION_RTL)
             iconView.translationX = originalTranslation + offset
             if (BuildConfig.DEBUG && !logged && offset != 0f) {
                 logged = true
                 HookLogger.d("IslandNativeSlotPlacement",
-                    "rhythm_anchor area=${areaView.width} module=${module.left},${module.right} " +
-                        "icon=${iconView.left},${iconView.right} offset=$offset")
+                    "${diagnosticName}_anchor area=${areaView.width} " +
+                        "module=${module.left},${module.right} icon=${iconView.left},${iconView.right} " +
+                        "originalGravity=$originalGravity offset=$offset")
             }
         }
 
@@ -109,8 +140,31 @@ internal object IslandNativeSlotPlacement {
 
     internal fun rhythmOffset(areaWidth: Int, paddingLeft: Int, paddingRight: Int,
         leftMargin: Int, rightMargin: Int, moduleLeft: Int, moduleWidth: Int, rtl: Boolean): Float {
-        val nativeLeft = if (rtl) paddingLeft + leftMargin
-            else areaWidth - paddingRight - rightMargin - moduleWidth
+        return nativeIconOffset(areaWidth, paddingLeft, paddingRight, leftMargin, rightMargin,
+            moduleLeft, moduleWidth, Gravity.END, rtl)
+    }
+
+    internal fun nativeIconOffset(
+        areaWidth: Int,
+        paddingLeft: Int,
+        paddingRight: Int,
+        leftMargin: Int,
+        rightMargin: Int,
+        moduleLeft: Int,
+        moduleWidth: Int,
+        originalGravity: Int,
+        rtl: Boolean,
+    ): Float {
+        val startLeft = paddingLeft + leftMargin
+        val endLeft = areaWidth - paddingRight - rightMargin - moduleWidth
+        val horizontalGravity = originalGravity and Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK
+        val nativeLeft = when (horizontalGravity) {
+            Gravity.START -> if (rtl) endLeft else startLeft
+            Gravity.END -> if (rtl) startLeft else endLeft
+            Gravity.RIGHT -> endLeft
+            Gravity.CENTER_HORIZONTAL -> startLeft + (endLeft - startLeft) / 2
+            else -> startLeft
+        }
         return (nativeLeft - moduleLeft).toFloat()
     }
 

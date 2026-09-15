@@ -25,6 +25,9 @@ internal class SpaceGateWordSyncRenderer(private val view: SpaceGateLyricLineVie
     private val scrollStepper = ScrollStepper()
     private val textDrawer = TextDrawer()
 
+    /** 分离模式挖孔布局；null 表示未挖孔，条带连续。 */
+    var gateSplit: GateSplitLayout? = null
+
     var isScrollOnly = false
     override var centerIfPossible = false
     override var alignRight = false
@@ -171,12 +174,15 @@ internal class SpaceGateWordSyncRenderer(private val view: SpaceGateLyricLineVie
         viewWidth: Int,
         viewHeight: Int
     ) {
+        // 溢出标志同样按挖孔后宽度判定：未挖孔装得下、挖孔后超出的行
+        // 也要走 scrollX 偏移，否则滚动推进了而绘制停在对齐位置。
+        val contentWidth = gateSplit?.holedWidth ?: model.width
         textDrawer.draw(
             canvas, model, viewWidth, viewHeight,
-            state.scrollOffset, model.width > viewWidth,
+            state.scrollOffset, contentWidth > viewWidth,
             progressAnimator.currentWidth,
             isGradientEnabled, isScrollOnly, isCharMotionEnabled, centerIfPossible, alignRight,
-            bgPaint, hlPaint, paint
+            bgPaint, hlPaint, paint, gateSplit
         )
     }
 
@@ -194,8 +200,16 @@ internal class SpaceGateWordSyncRenderer(private val view: SpaceGateLyricLineVie
     }
 
     private fun updateScrollState(model: LyricModel, state: LineState, viewWidth: Int) {
+        // 滚动目标必须与绘制同坐标系：挖孔后条带可见总宽是 holedWidth，
+        // 高亮边缘越过分割点后绘制位置右移 holeWidth。继续用未挖孔宽度，
+        // 行尾收尾滚动会差一个挖孔宽度，尾字停在右缘外被裁掉。
+        val split = gateSplit
+        val highlightWidth = progressAnimator.currentWidth
+        val visualHighlight =
+            if (split != null) highlightWidth + split.shiftFor(highlightWidth) else highlightWidth
+        val contentWidth = split?.holedWidth ?: model.width
         val offset = scrollStepper.compute(
-            progressAnimator.currentWidth, model.width,
+            visualHighlight, contentWidth,
             viewWidth.toFloat(), progressAnimator.hasFinished, state.isScrollFinished
         )
         state.scrollOffset = offset

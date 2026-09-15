@@ -96,6 +96,28 @@ class IslandSlotRuntimeConfigTest {
         )
     }
 
+    @Test
+    fun `split mode treats both side lyric positions as default`() {
+        val config = IslandSlotRuntimeConfig.from(preferences(mapOf(
+            RootConstants.KEY_HOOK_LYRIC_MODE to RootConstants.HOOK_LYRIC_MODE_SPLIT,
+            RootConstants.KEY_HOOK_ISLAND_LEFT_LYRIC_POSITION to
+                RootConstants.ISLAND_LYRIC_POSITION_CENTER,
+            RootConstants.KEY_HOOK_ISLAND_RIGHT_LYRIC_POSITION to
+                RootConstants.ISLAND_LYRIC_POSITION_RIGHT,
+        )))
+        assertTrue(config.isSplitMode)
+        assertFalse(config.centerLyric(true))
+        assertFalse(config.centerLyric(false))
+        assertFalse(config.rightAlignLyric(true))
+        assertFalse(config.rightAlignLyric(false))
+        assertEquals(android.view.Gravity.START, config.wrapperHorizontalGravity(true))
+        assertEquals(android.view.Gravity.START, config.wrapperHorizontalGravity(false))
+        assertEquals(
+            config.wrapperHorizontalGravity(false),
+            config.wrapperHorizontalGravity(false, true)
+        )
+    }
+
     private fun preferences(values: Map<String, Any>): SharedPreferences {
         return Proxy.newProxyInstance(SharedPreferences::class.java.classLoader,
             arrayOf(SharedPreferences::class.java)) { _, method, args ->

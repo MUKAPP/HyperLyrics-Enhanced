@@ -13,6 +13,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
+import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.TextPaint
 import com.juren233.hyperlyricsenhanced.BuildConfig
@@ -61,11 +63,13 @@ internal class LineShadowRenderer {
         centerIfPossible: Boolean,
         alignRight: Boolean,
         ghostSpacing: Float,
+        gateSplit: GateSplitLayout? = null,
     ) {
         val shadowRadius = sourcePaint.getShadowLayerRadius()
         val text = if (model.isPlainText) model.text else model.wordText
         if (shadowRadius <= 0f || text.isEmpty() || model.width <= 0f) return
 
+        val laidWidth = gateSplit?.holedWidth ?: model.width
         val bitmap = ensureShadowBitmap(
             text = text,
             textWidth = model.width,
@@ -76,7 +80,7 @@ internal class LineShadowRenderer {
         ) ?: return
 
         val startX = resolveShadowTextStartX(
-            textWidth = model.width,
+            textWidth = laidWidth,
             viewWidth = viewWidth.toFloat(),
             scrollOffset = scrollOffset,
             isPlainText = model.isPlainText,
@@ -94,29 +98,70 @@ internal class LineShadowRenderer {
             bitmapPaint.colorFilter = PorterDuffColorFilter(shadowColor, PorterDuff.Mode.SRC_IN)
         }
 
-        drawShadowBitmap(
+        drawSplitAware(
             canvas = canvas,
             bitmap = bitmap,
-            textStartX = startX,
+            gateSplit = gateSplit,
+            startX = startX,
             textTop = textTop,
             shadowDx = sourcePaint.getShadowLayerDx(),
             shadowDy = sourcePaint.getShadowLayerDy(),
         )
         resolveShadowGhostStartX(
             primaryStartX = startX,
-            textWidth = model.width,
+            textWidth = laidWidth,
             viewWidth = viewWidth.toFloat(),
             ghostSpacing = ghostSpacing,
             isPlainText = model.isPlainText,
         )?.let { ghostStartX ->
-            drawShadowBitmap(
+            drawSplitAware(
                 canvas = canvas,
                 bitmap = bitmap,
-                textStartX = ghostStartX,
+                gateSplit = gateSplit,
+                startX = ghostStartX,
                 textTop = textTop,
                 shadowDx = sourcePaint.getShadowLayerDx(),
                 shadowDy = sourcePaint.getShadowLayerDy(),
             )
+        }
+    }
+
+    /**
+     * 挖孔时阴影位图按源矩形精确切两片：A 片含前段及左侧模糊边，B 片从
+     * 前段宽度处起、整片右移挖孔宽，使后段阴影与新起笔位置对齐。两片各带
+     * 自己字形的完整模糊边缘，接缝处软性衔接、不重不漏。
+     */
+    private fun drawSplitAware(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        gateSplit: GateSplitLayout?,
+        startX: Float,
+        textTop: Float,
+        shadowDx: Float,
+        shadowDy: Float,
+    ) {
+        val split = gateSplit
+        if (split == null || split.holeWidth <= 0f) {
+            drawShadowBitmap(canvas, bitmap, startX, textTop, shadowDx, shadowDy)
+            return
+        }
+        // 位图 x 与条带文本 x 的换算：text x=0 位于 maskPadding − extractedOffsetX。
+        val textOriginInBitmap = maskPadding - extractedOffsetX
+        val srcSplitX = (split.runAWidth + textOriginInBitmap)
+            .toInt().coerceIn(0, bitmap.width)
+        val dstTop = textTop - maskPadding + extractedOffsetY + shadowDy
+        val dstBottom = dstTop + bitmap.height
+
+        val fullDrawX = startX - maskPadding + extractedOffsetX + shadowDx
+        val aSrc = Rect(0, 0, srcSplitX, bitmap.height)
+        val aDst = RectF(fullDrawX, dstTop, fullDrawX + srcSplitX, dstBottom)
+        canvas.drawBitmap(bitmap, aSrc, aDst, bitmapPaint)
+
+        if (srcSplitX < bitmap.width) {
+            val bDrawX = startX + split.runBStripStart + shadowDx
+            val bSrc = Rect(srcSplitX, 0, bitmap.width, bitmap.height)
+            val bDst = RectF(bDrawX, dstTop, bDrawX + (bitmap.width - srcSplitX), dstBottom)
+            canvas.drawBitmap(bitmap, bSrc, bDst, bitmapPaint)
         }
     }
 

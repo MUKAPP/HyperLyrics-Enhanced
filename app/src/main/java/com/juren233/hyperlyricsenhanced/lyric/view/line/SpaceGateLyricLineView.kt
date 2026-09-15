@@ -51,6 +51,10 @@ open class SpaceGateLyricLineView(context: Context, attrs: AttributeSet? = null)
     var siblingView: SpaceGateLyricLineView? = null
     var spaceGateEnabled = true
 
+    /** 分离模式挖孔布局；null 表示当前几何/内容下不挖孔。 */
+    private var cachedGateSplit: GateSplitLayout? = null
+    private var gateSplitKey: List<Any?>? = null
+
 
     override val textPaint: TextPaint = TextPaintX().apply { textSize = 24f.sp }
 
@@ -75,7 +79,12 @@ open class SpaceGateLyricLineView(context: Context, attrs: AttributeSet? = null)
     val isPlainText: Boolean get() = _model.isPlainText
     val isInterludeIndicator: Boolean get() = interludeDotsRenderer.isIndicator(_model)
     val isWordSync: Boolean get() = !isPlainText
-    val isOverflow: Boolean get() = lineWidth > getSpaceGateVirtualWidth()
+    // 溢出判定与滚动使用同一内容宽度：挖孔把条带撑宽了 holeWidth，
+    // 只看未挖孔行宽会让“未挖孔装得下、挖孔后尾巴出界”的行永远不滚动。
+    val isOverflow: Boolean get() = marqueeContentWidth() > getSpaceGateVirtualWidth()
+
+    private fun marqueeContentWidth(): Float =
+        cachedGateSplit?.holedWidth ?: lineWidth
     val isPlaying: Boolean get() = activeRenderer.isPlaying
     val isFinished: Boolean get() = activeRenderer.isFinished
     val isStarted: Boolean get() = activeRenderer.isStarted
@@ -417,6 +426,7 @@ open class SpaceGateLyricLineView(context: Context, attrs: AttributeSet? = null)
 
     fun relayout() {
         traceSwitch("before_relayout")
+        ensureGateSplit()
         if (isWordSync) syncRenderer.updateLayout(_model, lineState, getSpaceGateVirtualWidth(), measuredHeight)
         traceSwitch("after_relayout")
     }
@@ -552,9 +562,12 @@ open class SpaceGateLyricLineView(context: Context, attrs: AttributeSet? = null)
 
         val master = if (isRightSide) this else siblingView
         if (master == null) {
+            // 无对端时退回单槽渲染，挖孔引用一并清掉，避免残留分段绘制。
+            if (gateSplitKey != null) clearGateSplit()
             drawContent(canvas, scrollWidth)
             return
         }
+        ensureGateSplit()
 
         val sibling = siblingView
         val (leftView, rightView) = if (isRightSide) {
@@ -588,6 +601,57 @@ open class SpaceGateLyricLineView(context: Context, attrs: AttributeSet? = null)
         if (isRightSide) {
             sibling?.postInvalidateOnAnimation()
         }
+    }
+
+    /**
+     * 计算并缓存挖孔布局。左右两槽基于同一行内容与同一组几何输入独立计算，
+     * 结果确定性一致；键命中即跳过。失效后同步清空两个渲染器的挖孔引用。
+     */
+    private fun ensureGateSplit() {
+        val sibling = siblingView
+        if (!spaceGateEnabled || sibling == null) {
+            if (gateSplitKey != null) clearGateSplit()
+            return
+        }
+        val leftView = if (isRightSide) sibling else this
+        val rightView = if (isRightSide) this else sibling
+        fun laidOutWidth(view: SpaceGateLyricLineView): Int =
+            view.width.takeIf { it > 0 } ?: view.measuredWidth
+        val leftWidth = laidOutWidth(leftView)
+        val rightWidth = laidOutWidth(rightView)
+        val key = listOf<Any?>(
+            _model.text,
+            _model.wordText,
+            _model.width.toBits(),
+            textPaint.textSize.toBits(),
+            leftWidth,
+            rightWidth,
+            centerIfPossible,
+            alignRight,
+            _model.isAlignedRight,
+        )
+        if (key == gateSplitKey) return
+        gateSplitKey = key
+        val computed = GateSplitLayout.compute(
+            model = _model,
+            paint = textPaint,
+            typefaceSelector = currentTypefaceSelector,
+            leftWidth = leftWidth,
+            rightWidth = rightWidth,
+            virtualWidth = maxOf(scrollWidth, leftWidth + rightWidth),
+            centerIfPossible = centerIfPossible,
+            alignRight = alignRight,
+        )
+        cachedGateSplit = computed
+        scrollRenderer.gateSplit = computed
+        syncRenderer.gateSplit = computed
+    }
+
+    private fun clearGateSplit() {
+        gateSplitKey = null
+        cachedGateSplit = null
+        scrollRenderer.gateSplit = null
+        syncRenderer.gateSplit = null
     }
 
     private fun drawContent(canvas: Canvas, availableWidth: Int) {
@@ -624,6 +688,7 @@ open class SpaceGateLyricLineView(context: Context, attrs: AttributeSet? = null)
             centerIfPossible = centerIfPossible,
             alignRight = alignRight,
             ghostSpacing = ghostSpacing,
+            gateSplit = cachedGateSplit,
         )
         textPaint.withoutShadowLayer {
             activeRenderer.draw(canvas, _model, textPaint, lineState, availableWidth, measuredHeight)
@@ -883,6 +948,7 @@ open class SpaceGateLyricLineView(context: Context, attrs: AttributeSet? = null)
                 return
             }
 
+            ensureGateSplit()
             val virtualWidth = getSpaceGateVirtualWidth()
             val deltaNanos = if (lastFrameNanos == 0L) 0L else frameTimeNanos - lastFrameNanos
             lastFrameNanos = frameTimeNanos

@@ -346,6 +346,7 @@ object RootConstants {
 
     // ================= DEFAULTS =================
     const val DEFAULT_HOOK_LYRIC_MODE = 0
+    const val HOOK_LYRIC_MODE_SPLIT = 1
     const val DEFAULT_HOOK_LYRICON_PROVIDER_DELAY = 0
     const val DEFAULT_HOOK_REMOVE_CJK_LYRIC_SPACES = false
     const val APPLE_MUSIC_CONTENT_UI_LANGUAGE_NONE = 0

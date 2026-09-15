@@ -653,14 +653,26 @@ internal object IslandLyricTextInjector {
         val leftView = rootView.findViewWithTag<View>(IslandProbeUtils.LEFT_TEST_VIEW_TAG) as? SpaceGateRichLyricLineView
         val rightView = rootView.findViewWithTag<View>(IslandProbeUtils.RIGHT_TEST_VIEW_TAG) as? SpaceGateRichLyricLineView
 
-        leftView?.main?.spaceGateEnabled = false
-        leftView?.secondary?.spaceGateEnabled = false
-        rightView?.main?.spaceGateEnabled = false
-        rightView?.secondary?.spaceGateEnabled = false
-
-        if (leftView != null && rightView != null) {
-            IslandHostFacade.logCameraCutoutInfo(rootView)
+        if (leftView == null || rightView == null) {
+            // 同步链路需要左右两槽都在；缺一侧时退回普通单槽渲染。
+            listOf(leftView, rightView).forEach { view ->
+                view?.main?.spaceGateEnabled = false
+                view?.secondary?.spaceGateEnabled = false
+            }
+            return
         }
+
+        // 整岛连续文本带：右槽为 Master 独跑帧循环与逐字进度，左槽为 Slave
+        // 在绘制时复制进度；两槽各画出同一条「虚拟总宽 = 左宽 + 右宽」的
+        // 完整文本带，中间挖孔区域不属于任何视口，文本在视觉上被其隔断。
+        leftView.setSpaceGateConfig(isRightSide = false, sibling = rightView)
+        rightView.setSpaceGateConfig(isRightSide = true, sibling = leftView)
+        leftView.main.spaceGateEnabled = true
+        leftView.secondary.spaceGateEnabled = true
+        rightView.main.spaceGateEnabled = true
+        rightView.secondary.spaceGateEnabled = true
+
+        IslandHostFacade.logCameraCutoutInfo(rootView)
     }
 
     private fun hideNativeChildren(container: ViewGroup, keepView: View) {

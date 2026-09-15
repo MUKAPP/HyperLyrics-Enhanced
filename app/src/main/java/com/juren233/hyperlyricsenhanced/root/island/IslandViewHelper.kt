@@ -8,6 +8,7 @@ import com.juren233.hyperlyricsenhanced.BuildConfig
 import com.juren233.hyperlyricsenhanced.root.HookEntry
 import com.juren233.hyperlyricsenhanced.root.island.view.MaxWidthFrameLayout
 import com.juren233.hyperlyricsenhanced.root.utils.HookLogger
+import java.util.Collections
 import java.util.WeakHashMap
 
 /**
@@ -19,6 +20,12 @@ object IslandViewHelper {
     private val SYSTEMUI_PKG_NAMES = arrayOf("miui.systemui.plugin", "com.android.systemui")
     private val originalMargins = WeakHashMap<View, MarginSnapshot>()
     private val isRelayouting = ThreadLocal.withInitial { false }
+    private val loggedRelayoutClasses = Collections.synchronizedSet(
+        Collections.newSetFromMap(WeakHashMap<Class<*>, Boolean>()),
+    )
+    private val loggedMissingRelayoutClasses = Collections.synchronizedSet(
+        Collections.newSetFromMap(WeakHashMap<Class<*>, Boolean>()),
+    )
 
     /**
      * 切换超级岛内部容器（如图标、文本容器）的可见性
@@ -233,9 +240,8 @@ object IslandViewHelper {
         if (!isDynamicWidthEnabled()) return
         var parent = view.parent
         while (parent is View) {
-            if (parent is ViewGroup && parent.javaClass.methods.any {
-                    it.name == "updateBigIslandViewWidth" || it.name == "calculateBigIslandWidth"
-                }
+            if (parent is ViewGroup &&
+                IslandRelayoutMethodResolver.resolve(parent.javaClass) != null
             ) {
                 triggerLyricContentRelayout(parent)
                 return
@@ -287,19 +293,32 @@ object IslandViewHelper {
             runCatching {
                 forceLayoutIslandAreasIfDynamicWidth(islandView)
                 val viewClass = islandView.javaClass
-                // 优先尝试 updateBigIslandViewWidth
-                val updateWidthMethod = viewClass.methods.find { it.name == "updateBigIslandViewWidth" }
-                if (updateWidthMethod != null) {
+                val resolved = IslandRelayoutMethodResolver.resolve(viewClass) ?: run {
+                    if (loggedMissingRelayoutClasses.add(viewClass)) {
+                        HookLogger.w(
+                            "IslandViewHelper",
+                            "跳过超级岛布局刷新: " +
+                                "reason=no_compatible_zero_arg_entry, class=${viewClass.name}",
+                        )
+                    }
+                    return@runCatching
+                }
+                if (BuildConfig.DEBUG && loggedRelayoutClasses.add(viewClass)) {
+                    HookLogger.i(
+                        "IslandViewHelper",
+                        "超级岛布局刷新入口: ${resolved.diagnosticSummary}",
+                    )
+                }
+                if (resolved.entry == IslandRelayoutEntry.UPDATE_BIG_ISLAND_VIEW_WIDTH) {
                     if (protectLyricLottie) {
                         IslandWidthEventRebindGuard.aroundLyricWidthRelayout(islandView) {
-                            updateWidthMethod.invoke(islandView)
+                            resolved.method.invoke(islandView)
                         }
                     } else {
-                        updateWidthMethod.invoke(islandView)
+                        resolved.method.invoke(islandView)
                     }
                 } else {
-                    // 兜底尝试 calculateBigIslandWidth
-                    viewClass.methods.find { it.name == "calculateBigIslandWidth" }?.invoke(islandView)
+                    resolved.method.invoke(islandView)
                 }
             }.onFailure { e ->
                 HookLogger.e("IslandViewHelper", "超级岛布局刷新失败", e)

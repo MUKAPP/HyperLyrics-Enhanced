@@ -49,7 +49,8 @@ fun LazyListScope.lyricDisplaySections(
     onRightLyricPositionChange: (Int) -> Unit,
     centerGroupVocals: Boolean,
     onCenterGroupVocalsChange: (Boolean) -> Unit,
-    showCenterGroupVocals: Boolean
+    showCenterGroupVocals: Boolean,
+    showSideLyricPositions: Boolean
 ) {
     item(key = "lyric_display") {
         Column {
@@ -94,18 +95,26 @@ fun LazyListScope.lyricDisplaySections(
                         stringResource(id = R.string.option_lyric_position_center),
                         stringResource(id = R.string.option_lyric_position_right),
                     )
-                    OverlayDropdownPreference(
-                        title = stringResource(id = R.string.title_left_lyric_position),
-                        items = positionOptions,
-                        selectedIndex = leftLyricPosition.coerceIn(0, positionOptions.lastIndex),
-                        onSelectedIndexChange = onLeftLyricPositionChange
-                    )
-                    OverlayDropdownPreference(
-                        title = stringResource(id = R.string.title_right_lyric_position),
-                        items = positionOptions,
-                        selectedIndex = rightLyricPosition.coerceIn(0, positionOptions.lastIndex),
-                        onSelectedIndexChange = onRightLyricPositionChange
-                    )
+                    AnimatedVisibility(
+                        visible = showSideLyricPositions,
+                        enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+                    ) {
+                        Column {
+                            OverlayDropdownPreference(
+                                title = stringResource(id = R.string.title_left_lyric_position),
+                                items = positionOptions,
+                                selectedIndex = leftLyricPosition.coerceIn(0, positionOptions.lastIndex),
+                                onSelectedIndexChange = onLeftLyricPositionChange
+                            )
+                            OverlayDropdownPreference(
+                                title = stringResource(id = R.string.title_right_lyric_position),
+                                items = positionOptions,
+                                selectedIndex = rightLyricPosition.coerceIn(0, positionOptions.lastIndex),
+                                onSelectedIndexChange = onRightLyricPositionChange
+                            )
+                        }
+                    }
                     AnimatedVisibility(visible = showCenterGroupVocals) {
                         SwitchPreference(
                             title = stringResource(id = R.string.title_center_group_vocals),

@@ -75,7 +75,8 @@ internal class TextDrawer {
         alignRight: Boolean,
         bgPaint: TextPaint,
         hlPaint: TextPaint,
-        normPaint: TextPaint
+        normPaint: TextPaint,
+        gateSplit: GateSplitLayout? = null
     ) {
         val y = (viewHeight / 2f) + baselineOffset
         canvas.withSave {
@@ -89,11 +90,16 @@ internal class TextDrawer {
             translate(xOffset, 0f)
 
             if (scrollOnly) {
-                val selector = typefaceSelector
-                if (selector != null) {
-                    MixedTypefaceText.drawText(canvas, model.wordText, 0f, y, normPaint, selector)
-                } else {
-                    canvas.drawText(model.wordText, 0f, y, normPaint)
+                forEachGateRun(model, gateSplit) { runText, unholedX, shift ->
+                    canvas.withSave {
+                        if (shift != 0f) translate(shift, 0f)
+                        val selector = typefaceSelector
+                        if (selector != null) {
+                            MixedTypefaceText.drawText(canvas, runText, unholedX, y, normPaint, selector)
+                        } else {
+                            canvas.drawText(runText, unholedX, y, normPaint)
+                        }
+                    }
                 }
                 return@withSave
             }
@@ -114,74 +120,116 @@ internal class TextDrawer {
                     Float.MAX_VALUE,
                     viewHeight,
                     y,
-                    bgPaint
+                    bgPaint,
+                    gateSplit
                 )
             } else if (!useGradient) {
-                canvas.withSave {
-                    canvas.clipRect(highlightWidth, 0f, Float.MAX_VALUE, viewHeight.toFloat())
-                    val selector = typefaceSelector
-                    if (selector != null) {
-                        MixedTypefaceText.drawText(canvas, model.wordText, 0f, y, bgPaint, selector)
-                    } else {
-                        canvas.drawText(model.wordText, 0f, y, bgPaint)
+                forEachGateRun(model, gateSplit) { runText, unholedX, shift ->
+                    canvas.withSave {
+                        if (shift != 0f) translate(shift, 0f)
+                        canvas.clipRect(highlightWidth, 0f, Float.MAX_VALUE, viewHeight.toFloat())
+                        val selector = typefaceSelector
+                        if (selector != null) {
+                            MixedTypefaceText.drawText(canvas, runText, unholedX, y, bgPaint, selector)
+                        } else {
+                            canvas.drawText(runText, unholedX, y, bgPaint)
+                        }
                     }
                 }
             } else {
-                val selector = typefaceSelector
-                if (selector != null) {
-                    MixedTypefaceText.drawText(canvas, model.wordText, 0f, y, bgPaint, selector)
-                } else {
-                    canvas.drawText(model.wordText, 0f, y, bgPaint)
+                forEachGateRun(model, gateSplit) { runText, unholedX, shift ->
+                    canvas.withSave {
+                        if (shift != 0f) translate(shift, 0f)
+                        val selector = typefaceSelector
+                        if (selector != null) {
+                            MixedTypefaceText.drawText(canvas, runText, unholedX, y, bgPaint, selector)
+                        } else {
+                            canvas.drawText(runText, unholedX, y, bgPaint)
+                        }
+                    }
                 }
             }
 
             if (highlightWidth > 0f) {
-                canvas.withSave {
-                    canvas.clipRect(0f, 0f, highlightWidth, viewHeight.toFloat())
-
-                    //val atEnd = highlightWidth >= model.width
-                    val atEnd = false
-                    if (useGradient && !atEnd) {
-                        val baseShader = if (isRainbowHl) {
-                            getOrCreateRainbowShader(model.width, hlColors)
-                        } else {
-                            LinearGradient(
-                                0f, 0f, model.width, 0f,
-                                hlPaint.color, hlPaint.color,
-                                Shader.TileMode.CLAMP
-                            )
-                        }
-                        val maskShader = getOrCreateAlphaMaskShader(model.width, highlightWidth)
-                        hlPaint.shader = ComposeShader(baseShader, maskShader, PorterDuff.Mode.DST_IN)
+                //val atEnd = highlightWidth >= model.width
+                val atEnd = false
+                if (useGradient && !atEnd) {
+                    val baseShader = if (isRainbowHl) {
+                        getOrCreateRainbowShader(model.width, hlColors)
                     } else {
-                        if (isRainbowHl) {
-                            hlPaint.shader = getOrCreateRainbowShader(model.width, hlColors)
-                        } else {
-                            hlPaint.shader = null
-                        }
-                    }
-                    if (charMotionEnabled) {
-                        drawAnimatedUnits(
-                            canvas,
-                            model,
-                            highlightWidth,
-                            0f,
-                            highlightWidth,
-                            viewHeight,
-                            y,
-                            hlPaint
+                        LinearGradient(
+                            0f, 0f, model.width, 0f,
+                            hlPaint.color, hlPaint.color,
+                            Shader.TileMode.CLAMP
                         )
+                    }
+                    val maskShader = getOrCreateAlphaMaskShader(model.width, highlightWidth)
+                    hlPaint.shader = ComposeShader(baseShader, maskShader, PorterDuff.Mode.DST_IN)
+                } else {
+                    if (isRainbowHl) {
+                        hlPaint.shader = getOrCreateRainbowShader(model.width, hlColors)
                     } else {
-                        val selector = typefaceSelector
-                        if (selector != null) {
-                            MixedTypefaceText.drawText(canvas, model.wordText, 0f, y, hlPaint, selector)
-                        } else {
-                            canvas.drawText(model.wordText, 0f, y, hlPaint)
+                        hlPaint.shader = null
+                    }
+                }
+                if (charMotionEnabled) {
+                    // 逐字单元自带按 clipStart/clipEnd 的未挖孔坐标裁剪，
+                    // 外层再叠加 clipRect 会在平移后剪错位置。
+                    drawAnimatedUnits(
+                        canvas,
+                        model,
+                        highlightWidth,
+                        0f,
+                        highlightWidth,
+                        viewHeight,
+                        y,
+                        hlPaint,
+                        gateSplit
+                    )
+                } else {
+                    forEachGateRun(model, gateSplit) { runText, unholedX, shift ->
+                        canvas.withSave {
+                            if (shift != 0f) translate(shift, 0f)
+                            canvas.clipRect(0f, 0f, highlightWidth, viewHeight.toFloat())
+                            val selector = typefaceSelector
+                            if (selector != null) {
+                                MixedTypefaceText.drawText(canvas, runText, unholedX, y, hlPaint, selector)
+                            } else {
+                                canvas.drawText(runText, unholedX, y, hlPaint)
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    /**
+     * 逐段绘制条带：无挖孔时只有一段（整行）；挖孔时前段在条带原点、
+     * 后段在 [GateSplitLayout.runBStripStart]，平移量由 [GateSplitLayout.shiftFor]
+     * 给出，段内裁剪坐标保持未挖孔坐标系。
+     */
+    private inline fun forEachGateRun(
+        model: LyricModel,
+        gateSplit: GateSplitLayout?,
+        block: (runText: String, unholedX: Float, shift: Float) -> Unit
+    ) {
+        val text = if (model.isPlainText) model.text else model.wordText
+        if (text.isEmpty()) return
+        val split = gateSplit
+        if (split == null || split.holeWidth <= 0f) {
+            block(text, 0f, 0f)
+            return
+        }
+        val k = split.splitCharIndex.coerceIn(0, text.length)
+        if (k <= 0 || k >= text.length) {
+            // 前段为空或后段为空：整行按单段处理，落在对应平移上。
+            val shift = if (k <= 0) split.holeWidth else 0f
+            block(text, 0f, shift)
+            return
+        }
+        block(text.substring(0, k), 0f, 0f)
+        block(text.substring(k), split.runAWidth, split.runBStripStart - split.runAWidth)
     }
 
     private fun drawAnimatedUnits(
@@ -192,10 +240,12 @@ internal class TextDrawer {
         clipEnd: Float,
         viewHeight: Int,
         baselineY: Float,
-        paint: TextPaint
+        paint: TextPaint,
+        gateSplit: GateSplitLayout? = null
     ) {
         model.words.forEach { word ->
             val motionSpec = word.motionSpec()
+            val wordShift = gateSplit?.shiftFor(word.startPosition) ?: 0f
             if (!motionSpec.animateByChar) {
                 drawAnimatedTextUnit(
                     canvas = canvas,
@@ -211,7 +261,8 @@ internal class TextDrawer {
                     viewHeight = viewHeight,
                     baselineY = baselineY,
                     paint = paint,
-                    motionSpec = motionSpec
+                    motionSpec = motionSpec,
+                    xShift = wordShift
                 )
                 return@forEach
             }
@@ -233,7 +284,8 @@ internal class TextDrawer {
                     viewHeight = viewHeight,
                     baselineY = baselineY,
                     paint = paint,
-                    motionSpec = motionSpec
+                    motionSpec = motionSpec,
+                    xShift = wordShift
                 )
             }
         }
@@ -253,7 +305,8 @@ internal class TextDrawer {
         viewHeight: Int,
         baselineY: Float,
         paint: TextPaint,
-        motionSpec: MotionSpec
+        motionSpec: MotionSpec,
+        xShift: Float = 0f
     ) {
         if (unitEnd <= clipStart || unitStart >= clipEnd) return
 
@@ -262,6 +315,7 @@ internal class TextDrawer {
         val liftY = computeUnitLift(highlightWidth, unitStart, unitEnd, paint.textSize, motionSpec)
 
         canvas.withSave {
+            if (xShift != 0f) translate(xShift, 0f)
             clipRect(visibleLeft, 0f, visibleRight, viewHeight.toFloat())
             val selector = typefaceSelector
             if (selector != null) {

@@ -294,6 +294,7 @@ internal data class ControllerState(
 
 internal class AodPluginApi private constructor(
     val hookMethods: List<Method>,
+    val hookResolutionSummary: String,
     private val tableModeContainerField: Field,
     private val notificationIconsField: Field,
     private val isAodShownMethod: Method
@@ -310,28 +311,14 @@ internal class AodPluginApi private constructor(
     companion object {
         fun create(classLoader: ClassLoader): AodPluginApi {
             val aodViewClass = classLoader.loadClass(NotificationMediaAodLyricHooker.AOD_PLUGIN_VIEW_CLASS)
-            val makeNormalPanel = aodViewClass.getDeclaredMethod("makeNormalPanel")
-                .apply { isAccessible = true }
-            val onAttached = aodViewClass.getDeclaredMethod("onAttachedToWindow")
-                .apply { isAccessible = true }
-            val onDetached = aodViewClass.getDeclaredMethod("onDetachedFromWindow")
-                .apply { isAccessible = true }
-            val onPositionTimer = aodViewClass.getDeclaredMethod("onUpdatePositionTimer")
-                .apply { isAccessible = true }
-            val onContentLayoutChange = aodViewClass.getDeclaredMethod(
-                "onAodContentLayoutChange",
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                Boolean::class.javaPrimitiveType
-            ).apply { isAccessible = true }
+            return create(aodViewClass)
+        }
+
+        fun create(aodViewClass: Class<*>): AodPluginApi {
+            val methodProfile = AodPluginMethodProfile.resolve(aodViewClass)
             return AodPluginApi(
-                hookMethods = listOf(
-                    makeNormalPanel,
-                    onAttached,
-                    onDetached,
-                    onPositionTimer,
-                    onContentLayoutChange
-                ),
+                hookMethods = methodProfile.hookMethods,
+                hookResolutionSummary = methodProfile.diagnosticSummary,
                 tableModeContainerField = aodViewClass
                     .getDeclaredField("mTableModeContainer")
                     .apply { isAccessible = true },

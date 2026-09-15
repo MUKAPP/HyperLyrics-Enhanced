@@ -123,6 +123,34 @@ class IslandSlotContentAssemblerTest {
     }
 
     @Test
+    fun `provider artist wins over media session artist in metadata line`() {
+        val artistName = IslandSlotContentAssembler.resolveMetadataArtistName(
+            lyricArtist = "一个小孩",
+            mediaArtist = "菲律宾没有雪-一个小孩"
+        )
+
+        assertEquals("一个小孩", artistName)
+    }
+
+    @Test
+    fun `blank provider artist falls back to media session artist`() {
+        assertEquals(
+            "imase",
+            IslandSlotContentAssembler.resolveMetadataArtistName(
+                lyricArtist = null,
+                mediaArtist = "imase"
+            )
+        )
+        assertEquals(
+            "imase",
+            IslandSlotContentAssembler.resolveMetadataArtistName(
+                lyricArtist = "   ",
+                mediaArtist = "imase"
+            )
+        )
+    }
+
+    @Test
     fun `real song title change still refreshes song info`() {
         val current = IslandSlotContentAssembler.buildMetadataLine(
             mode = 5,

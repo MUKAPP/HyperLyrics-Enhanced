@@ -474,8 +474,7 @@ class SpaceGateRichLyricLineView(
         } else if (main.hugContentWidth) {
             // 一段前先清掉上一轮下限：组宽必须由当前内容固有宽度决定，
             // 否则宽行留下的下限会棘轮式抬高后续窄行。
-            main.hugWidthFloor = null
-            secondary.hugWidthFloor = null
+            prepareHugMeasurePass(null)
             // 一段：各行按自身文字 hug，得到组内最宽行。
             super.onMeasure(wSpec, hSpec)
             // 二段：以"组内最宽行 / 对唱全曲最长行"为下限重测主/次行，
@@ -483,13 +482,20 @@ class SpaceGateRichLyricLineView(
             //（对唱换边、第二行翻译/伴唱/下一句预览定位）。
             val floor = resolveMeasureFloor(measuredWidth)
             if (floor > 0) {
-                main.hugWidthFloor = floor
-                secondary.hugWidthFloor = floor
+                prepareHugMeasurePass(floor)
                 super.onMeasure(wSpec, hSpec)
             }
         } else {
             super.onMeasure(wSpec, hSpec)
         }
+    }
+
+    /** Keep the second hug pass from reusing the first pass's cached child measurements. */
+    private fun prepareHugMeasurePass(floor: Int?) {
+        main.hugWidthFloor = floor
+        secondary.hugWidthFloor = floor
+        main.forceLayout()
+        secondary.forceLayout()
     }
 
     private var lastLayoutWidth = -1

@@ -2,14 +2,12 @@ package com.juren233.hyperlyricsenhanced.root.island
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.text.TextPaint
 import android.view.View
 import com.juren233.hyperlyricsenhanced.BuildConfig
 import com.juren233.hyperlyricsenhanced.common.RootConstants
 import com.juren233.hyperlyricsenhanced.common.IslandLyricPosition
 import com.juren233.hyperlyricsenhanced.common.lyric.CjkLyricWhitespacePolicy
 import com.juren233.hyperlyricsenhanced.common.lyric.LyricMetadataKeys
-import com.juren233.hyperlyricsenhanced.common.lyric.RichLyricLineSplitter
 import com.juren233.hyperlyricsenhanced.common.media.MediaMetadataHelper
 import com.juren233.hyperlyricsenhanced.lyric.model.LyricWord
 import com.juren233.hyperlyricsenhanced.lyric.model.RichLyricLine
@@ -495,32 +493,10 @@ internal object IslandSlotContentAssembler {
         config: IslandSlotRuntimeConfig,
         isLeft: Boolean
     ): IRichLyricLine? {
-        val rawLine = displayLyricLine(prefs, processedRawLine(prefs, config, isLeft))
-        if (!config.isSplitMode || rawLine == null) return rawLine
-        if (rawLine.text.isNullOrEmpty()) return rawLine
-
-        val density = view.resources.displayMetrics.density
-        val leftMaxPx = config.contentWidthPx(
-            view.resources.displayMetrics.widthPixels, density, isLeft = true
-        )?.toFloat() ?: 0f
-        val centerCurrentLine = shouldCenterLine(config, rawLine, isLeft)
-        val textPaint = TextPaint().apply {
-            textSize = config.textSizeSp.toFloat() * density
-        }
-        val splitPx = if (centerCurrentLine) {
-            val textWidth = textPaint.measureText(rawLine.text ?: "")
-            (textWidth / 2f).coerceAtMost(leftMaxPx)
-        } else {
-            leftMaxPx
-        }
-        val splitResult = RichLyricLineSplitter.split(
-            rawLine,
-            textPaint,
-            splitPx,
-            config.textSizeRatio,
-            centerCurrentLine
-        )
-        return if (isLeft) splitResult.left else splitResult.right
+        // 分离模式：左右两槽绑定同一整行，由 SpaceGate 主从视口各自裁出
+        // 自己的一窗，文本带横跨整座岛连续滚动/排布，中段仅被挖孔区域隔开。
+        // 不再做按像素宽的静态文本切分。
+        return displayLyricLine(prefs, processedRawLine(prefs, config, isLeft))
     }
 
     fun processedRawLine(
@@ -611,7 +587,10 @@ internal object IslandSlotContentAssembler {
             }
         )
         val isLeft = view.tag == IslandProbeUtils.LEFT_TEST_VIEW_TAG
-        val centerCurrentLine = shouldCenterLine(config, targetLine, isLeft)
+        // 分离模式下两槽画的是同一条文本带，居中/靠右必须两侧一致，
+        // 统一采用左槽的位置偏好（带的原点是岛左缘），否则两个视口错位。
+        val alignmentIsLeft = if (config.isSplitMode) true else isLeft
+        val centerCurrentLine = shouldCenterLine(config, targetLine, alignmentIsLeft)
         val isNextLinePreview = targetLine?.metadata?.getBoolean(
             METADATA_NEXT_LINE_PREVIEW
         ) == true
@@ -636,8 +615,8 @@ internal object IslandSlotContentAssembler {
                 applyLineCentering(view, centerCurrentLine, centerSecondaryLine)
                 applyLineRightAlignment(
                     view,
-                    alignMainRight = config.rightAlignLyric(isLeft) && !centerCurrentLine,
-                    alignSecondaryRight = config.rightAlignLyric(isLeft) && !centerSecondaryLine
+                    alignMainRight = config.rightAlignLyric(alignmentIsLeft) && !centerCurrentLine,
+                    alignSecondaryRight = config.rightAlignLyric(alignmentIsLeft) && !centerSecondaryLine
                 )
             }
             applyPlaybackActive(view, playbackActive)
@@ -648,8 +627,8 @@ internal object IslandSlotContentAssembler {
             applyLineCentering(target, centerCurrentLine, centerSecondaryLine)
             applyLineRightAlignment(
                 target,
-                alignMainRight = config.rightAlignLyric(isLeft) && !centerCurrentLine,
-                alignSecondaryRight = config.rightAlignLyric(isLeft) && !centerSecondaryLine
+                alignMainRight = config.rightAlignLyric(alignmentIsLeft) && !centerCurrentLine,
+                alignSecondaryRight = config.rightAlignLyric(alignmentIsLeft) && !centerSecondaryLine
             )
             when (target) {
                 is RichLyricLineView -> {
@@ -713,7 +692,10 @@ internal object IslandSlotContentAssembler {
             currentSongName = LyriconDataBridge.currentSongName,
             mediaTitle = mediaInfo.title
         )
-        val artistName = mediaInfo.artist
+        val artistName = resolveMetadataArtistName(
+            lyricArtist = LyriconDataBridge.currentSong?.artist,
+            mediaArtist = mediaInfo.artist
+        )
         val albumName = mediaInfo.album
 
         val signature = listOf(
@@ -759,6 +741,17 @@ internal object IslandSlotContentAssembler {
     ): String = lyricSongName?.takeIf { it.isNotBlank() }
         ?: currentSongName?.takeIf { it.isNotBlank() }
         ?: mediaTitle
+
+    /**
+     * 与 resolveMetadataSongName 同一优先级链：Provider 发布的权威歌手优先，
+     * 媒体库原始值兜底。国内音乐 App 开启车载歌词时会把「歌名-歌手」组合串
+     * 写进 MediaSession 的歌手字段，只有桥内的 Provider 数据是干净的。
+     */
+    internal fun resolveMetadataArtistName(
+        lyricArtist: String?,
+        mediaArtist: String
+    ): String = lyricArtist?.takeIf { it.isNotBlank() }
+        ?: mediaArtist
 
     internal fun buildMetadataLine(
         mode: Int,
@@ -898,7 +891,9 @@ internal object IslandSlotContentAssembler {
                     options.fallback,
                     options.hideSecondaryContent
                 )
-                view.hugContentWidth = config.dynamicWidthEnabled
+                // 分离模式两槽共享同一整行，hug 收缩会让两侧都量出整行宽、
+                // 把岛宽计算撑大一倍；整带几何要求每槽恒占满自己的槽宽。
+                view.hugContentWidth = config.dynamicWidthEnabled && !config.isSplitMode
                 view.applyDuetFixedLength(duetSongLyrics, duetWidthCapOf(view))
                 view.onDeferredContentApplied = {
                     IslandViewHelper.triggerSystemRelayoutForDescendant(view)

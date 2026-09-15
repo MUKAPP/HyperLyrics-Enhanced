@@ -128,6 +128,8 @@ fun LyricDisplayPage() {
     }
     var centerGroupVocals by remember { mutableStateOf(prefs.getBoolean(RootConstants.KEY_HOOK_CENTER_GROUP_VOCALS, RootConstants.DEFAULT_HOOK_CENTER_GROUP_VOCALS)) }
     val lyricMode = prefs.getInt(RootConstants.KEY_HOOK_LYRIC_MODE, RootConstants.DEFAULT_HOOK_LYRIC_MODE)
+    // 分离歌词两槽共用一条文本带，两侧位置显示整体按默认处理，设置项一并隐藏。
+    val showSideLyricPositions = lyricMode != RootConstants.HOOK_LYRIC_MODE_SPLIT
     val leftContent = prefs.getInt(RootConstants.KEY_HOOK_ISLAND_CONTENT_LEFT, RootConstants.DEFAULT_HOOK_ISLAND_CONTENT_LEFT)
     val rightContent = prefs.getInt(RootConstants.KEY_HOOK_ISLAND_CONTENT_RIGHT, RootConstants.DEFAULT_HOOK_ISLAND_CONTENT_RIGHT)
     val showCenterGroupVocals = IslandLyricPosition.supportsGroupVocalCentering(
@@ -298,6 +300,7 @@ fun LyricDisplayPage() {
             },
             centerGroupVocals = centerGroupVocals,
             showCenterGroupVocals = showCenterGroupVocals,
+            showSideLyricPositions = showSideLyricPositions,
             onCenterGroupVocalsChange = {
                 centerGroupVocals = it
                 saveConfig(RootConstants.KEY_HOOK_CENTER_GROUP_VOCALS, it)

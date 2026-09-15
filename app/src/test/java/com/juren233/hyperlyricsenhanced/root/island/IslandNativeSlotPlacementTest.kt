@@ -29,6 +29,23 @@ class IslandNativeSlotPlacementTest {
             275, 8, 10, 7, 7, 78, 182, true), 0f)
     }
 
+    @Test fun `album stays at native start edge across text placements`() {
+        for (width in listOf(182, 100, 275)) {
+            for (left in listOf(0, (275 - width) / 2, 275 - width)) {
+                val offset = IslandNativeSlotPlacement.nativeIconOffset(
+                    275, 0, 0, 0, 0, left, width, Gravity.START, false)
+                assertEquals(0f, left + offset, 0f)
+            }
+        }
+    }
+
+    @Test fun `album native start respects padding margins and rtl`() {
+        assertEquals(15f, 108 + IslandNativeSlotPlacement.nativeIconOffset(
+            275, 8, 10, 7, 7, 108, 100, Gravity.START, false), 0f)
+        assertEquals(258f, 42 + 100 + IslandNativeSlotPlacement.nativeIconOffset(
+            275, 8, 10, 7, 7, 42, 100, Gravity.START, true), 0f)
+    }
+
     @Test fun `short default content anchors native module at start not end`() {
         assertEquals(Gravity.START or Gravity.CENTER_VERTICAL,
             IslandNativeSlotPlacement.resolveGravity(nativeRight, true, Gravity.START))
