@@ -7,6 +7,7 @@
 package com.juren233.hyperlyricsenhanced.provider
 
 import android.content.Context
+import com.juren233.hyperlyricsenhanced.BuildConfig
 import com.juren233.hyperlyricsenhanced.common.PrefsBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -223,7 +224,12 @@ object OfficialProviderRepository {
 
     private suspend fun fetchVerifiedCatalog(context: Context?): VerifiedCatalog {
         var lastError: Throwable? = null
+        OfficialProviderAcquisitionLog.info(
+            "插件目录加载开始: 候选源=${CATALOG_BASE_URLS.size} " +
+                "app=${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})",
+        )
         for (base in CATALOG_BASE_URLS) {
+            val host = runCatching { URI(base).host }.getOrNull() ?: base
             try {
                 val catalogBytes = fetch("${base}catalog.json", MAX_CATALOG_BYTES)
                 val signatureText = fetch("${base}catalog.sig", 4096)
@@ -235,14 +241,33 @@ object OfficialProviderRepository {
                 ) { "Provider 目录签名无效" }
                 val verified = VerifiedCatalog(catalogBytes, signatureBytes)
                 writeCatalogCache(context, verified)
+                OfficialProviderAcquisitionLog.info(
+                    "插件目录加载成功: host=$host bytes=${catalogBytes.size} " +
+                        "signatureBytes=${signatureBytes.size}",
+                )
                 return verified
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 lastError = e
+                OfficialProviderAcquisitionLog.warn(
+                    "插件目录源失败: host=$host " +
+                        "error=${OfficialProviderAcquisitionLog.describe(e)}",
+                )
             }
         }
-        readCatalogCache(context)?.let { return it }
+        val cached = readCatalogCache(context)
+        if (cached != null) {
+            OfficialProviderAcquisitionLog.warn(
+                "插件目录改用本地缓存: bytes=${cached.catalogBytes.size} " +
+                    "lastError=${OfficialProviderAcquisitionLog.describe(lastError)}",
+            )
+            return cached
+        }
+        OfficialProviderAcquisitionLog.error(
+            "插件目录加载失败: 所有候选源与本地缓存均不可用",
+            lastError,
+        )
         throw lastError ?: IllegalStateException("Provider 目录不可用")
     }
 
@@ -303,10 +328,24 @@ object OfficialProviderRepository {
         val assetUrl = requireNotNull(entry.assetUrl)
         validateAssetUrl(assetUrl)
         val expectedSha256 = requireNotNull(entry.sha256)
+        OfficialProviderAcquisitionLog.info(
+            "插件安装开始: id=${entry.id} 目录版本=${entry.versionCode} " +
+                "targets=${entry.targetPackages.joinToString()}",
+        )
         val packBytes = fetchPackWithMirrors(assetUrl, expectedSha256)
         val installed = OfficialProviderInstaller.install(context, packBytes)
+        if (installed.pluginId != entry.id || installed.versionCode != entry.versionCode) {
+            OfficialProviderAcquisitionLog.error(
+                "插件与目录不一致: 目录(id=${entry.id} version=${entry.versionCode}) " +
+                    "实际(id=${installed.pluginId} version=${installed.versionCode})",
+            )
+        }
         require(installed.pluginId == entry.id) { "下载的 Provider 与目录不一致" }
         require(installed.versionCode == entry.versionCode) { "Provider 版本与目录不一致" }
+        OfficialProviderAcquisitionLog.info(
+            "插件安装完成: id=${installed.pluginId} version=${installed.versionCode} " +
+                "name=${installed.versionName} bytes=${packBytes.size}",
+        )
         return installed
     }
 
@@ -359,17 +398,35 @@ object OfficialProviderRepository {
 
     private suspend fun fetchPackWithMirrors(assetUrl: String, expectedSha256: String): ByteArray {
         var lastError: Throwable? = null
-        for (url in packUrlCandidates(assetUrl)) {
+        val candidates = packUrlCandidates(assetUrl)
+        OfficialProviderAcquisitionLog.info(
+            "插件文件下载开始: 候选源=${candidates.size} 期望摘要=${expectedSha256.take(12)}",
+        )
+        for (url in candidates) {
             try {
                 val bytes = fetch(url, MAX_PACK_BYTES, packClient)
-                require(sha256(bytes).equals(expectedSha256, ignoreCase = true)) {
+                val actualSha256 = sha256(bytes)
+                if (!actualSha256.equals(expectedSha256, ignoreCase = true)) {
+                    OfficialProviderAcquisitionLog.warn(
+                        "插件文件摘要不一致: url=$url bytes=${bytes.size} " +
+                            "expected=${expectedSha256.take(12)} actual=${actualSha256.take(12)}",
+                    )
+                }
+                require(actualSha256.equals(expectedSha256, ignoreCase = true)) {
                     "Provider Pack 与目录摘要不一致"
                 }
+                OfficialProviderAcquisitionLog.info(
+                    "插件文件下载成功: url=$url bytes=${bytes.size}",
+                )
                 return bytes
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 lastError = e
+                OfficialProviderAcquisitionLog.warn(
+                    "插件文件下载源失败: url=$url " +
+                        "error=${OfficialProviderAcquisitionLog.describe(e)}",
+                )
             }
         }
         throw lastError ?: IllegalStateException("Provider Pack 下载不可用")
@@ -382,13 +439,30 @@ object OfficialProviderRepository {
     ): ByteArray =
         withContext(Dispatchers.IO) {
             val request = Request.Builder().url(url).get().build()
+            val startedAtNanos = System.nanoTime()
             client.newCall(request).execute().use { response ->
+                val headerElapsedMs = (System.nanoTime() - startedAtNanos) / 1_000_000
+                if (response.isSuccessful) {
+                    OfficialProviderAcquisitionLog.info(
+                        "下载响应成功: status=${response.code} host=${request.url.host} " +
+                            "url=$url elapsed=${headerElapsedMs}ms",
+                    )
+                } else {
+                    OfficialProviderAcquisitionLog.warn(
+                        "下载响应失败: status=${response.code} host=${request.url.host} " +
+                            "url=$url elapsed=${headerElapsedMs}ms",
+                    )
+                }
                 check(response.isSuccessful) {
                     "下载失败: HTTP ${response.code} (${request.url.host})"
                 }
                 val body = requireNotNull(response.body)
                 val bytes = body.bytes()
                 require(bytes.size <= maxBytes) { "下载内容超过大小限制" }
+                OfficialProviderAcquisitionLog.info(
+                    "下载内容就绪: host=${request.url.host} bytes=${bytes.size} limit=$maxBytes " +
+                        "elapsed=${(System.nanoTime() - startedAtNanos) / 1_000_000}ms",
+                )
                 bytes
             }
         }

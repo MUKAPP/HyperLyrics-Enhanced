@@ -45,6 +45,14 @@
     <string name="title_classic_aod">经典AOD</string>
     <string name="title_dynamic_island_config">通知型灵动岛歌词自定义配置</string>
     <string name="title_special_features">特殊功能</string>
+    <string name="title_global_features">全局功能</string>
+    <string name="title_feature_switches">功能开关</string>
+    <string name="title_feature_entry_super_island">米系超级岛歌词入口</string>
+    <string name="title_feature_entry_aod_lyrics">米系息屏歌词入口</string>
+    <string name="title_feature_entry_apple_music">Apple Music体验优化入口</string>
+    <string name="title_unsupported_device">似乎你的手机不适合使用HyperLyrics Enhanced</string>
+    <string name="summary_unsupported_device">不过你依旧可以选择在应用设置中开启入口</string>
+    <string name="action_enter_app_settings">进入应用设置</string>
     <string name="title_unlock_island_length">解除超级岛长度限制</string>
     <string name="title_remove_focus_whitelist">移除焦点通知白名单</string>
     <string name="summary_remove_focus_whitelist">不要和其他模块的相同功能冲突使用</string>

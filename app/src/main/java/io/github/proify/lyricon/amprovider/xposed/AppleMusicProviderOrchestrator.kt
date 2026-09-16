@@ -75,10 +75,16 @@ internal object AppleMusicProviderOrchestrator {
         }
         runtime = AppleMusicProviderRuntime(module, classLoader)
         val onCreate = Application::class.java.getDeclaredMethod("onCreate")
+        // 生命周期引导 Hook 不参与入口门控：入口关闭期间仍需完成运行时装配，
+        // 重新打开入口后功能 Hook 才能立即恢复。
         hookRegistrar.withModule("provider-lifecycle") {
-            hookRegistrar.installHook(onCreate, after = { chain, _ ->
-                (chain.thisObject as? Application)?.let(::onAppCreate)
-            })
+            hookRegistrar.installHook(
+                executable = onCreate,
+                after = { chain, _ ->
+                    (chain.thisObject as? Application)?.let(::onAppCreate)
+                },
+                gated = false,
+            )
         }
         ProviderLogger.info("Apple Music 内置歌词提供器生命周期 Hook 已安装")
     }

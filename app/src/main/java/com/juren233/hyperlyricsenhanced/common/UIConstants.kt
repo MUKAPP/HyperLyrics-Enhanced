@@ -19,6 +19,16 @@ object UIConstants {
     const val KEY_LOG_LEVEL = "key_log_level"
     const val KEY_LOG_LEVEL_BUILD_KIND = "key_log_level_build_kind"
     const val KEY_LAST_SEEN_VERSION = "key_last_seen_version"
+    const val KEY_FEATURE_ENTRY_SUPER_ISLAND = "key_feature_entry_super_island"
+    const val KEY_FEATURE_ENTRY_AOD_LYRICS = "key_feature_entry_aod_lyrics"
+    const val KEY_FEATURE_ENTRY_APPLE_MUSIC = "key_feature_entry_apple_music"
+    /** 功能入口一次性初始化是否已执行（首次安装 / 首次升级到带入口的版本时写入）。 */
+    const val KEY_FEATURE_ENTRY_INITIALIZED = "key_feature_entry_initialized"
+    /** 上次观测到的 Apple Music 安装状态：用于检测安装/卸载并重新触发入口的自动开关。 */
+    const val KEY_FEATURE_ENTRY_APPLE_MUSIC_INSTALL_SNAPSHOT =
+        "key_feature_entry_apple_music_install_snapshot"
+    /** 功能入口关闭时，被停用功能自身开关值的暂存前缀（键名 = 前缀 + 功能键）。 */
+    const val KEY_FEATURE_ENTRY_STASH_PREFIX = "key_feature_entry_stash_"
 
     // ================= DEFAULTS =================
     const val DEFAULT_WORK_MODE = 0

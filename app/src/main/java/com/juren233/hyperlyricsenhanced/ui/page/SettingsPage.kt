@@ -34,12 +34,19 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.juren233.hyperlyricsenhanced.BuildConfig
 import com.juren233.hyperlyricsenhanced.R
+import com.juren233.hyperlyricsenhanced.common.FeatureEntryConfig
+import com.juren233.hyperlyricsenhanced.common.FeatureEntryGate
 import com.juren233.hyperlyricsenhanced.common.LogLevelPolicy
 import com.juren233.hyperlyricsenhanced.common.PrefsBridge
+import com.juren233.hyperlyricsenhanced.common.RootConstants
 import com.juren233.hyperlyricsenhanced.common.UIConstants
 import com.juren233.hyperlyricsenhanced.root.settings.SettingsEntryProfile
+import com.juren233.hyperlyricsenhanced.ui.component.LyricHookPermissionSheet
+import com.juren233.hyperlyricsenhanced.ui.component.LyricHookSwitchController
+import com.juren233.hyperlyricsenhanced.ui.component.rememberLyricHookSwitchController
 import com.juren233.hyperlyricsenhanced.ui.navigation.LocalNavigator
 import com.juren233.hyperlyricsenhanced.ui.navigation.Route
+import com.juren233.hyperlyricsenhanced.ui.page.main.MainTabPolicy
 import com.juren233.hyperlyricsenhanced.ui.utils.AppUtils
 import com.juren233.hyperlyricsenhanced.ui.utils.BlurredBar
 import com.juren233.hyperlyricsenhanced.ui.utils.LocaleUtils
@@ -193,6 +200,71 @@ fun SettingsPage() {
         }
     )
 
+    val prefs = remember(context) {
+        context.getSharedPreferences(UIConstants.PREF_NAME, Context.MODE_PRIVATE)
+    }
+    // 歌词相关开关：主页保留时留在主页，主页被隐藏（两个米系入口都关闭）时迁到设置页顶部。
+    // 状态与副作用由控制器统一持有，与主页共用同一份实现。
+    val lyricHookSwitches = rememberLyricHookSwitchController()
+
+    // --- 功能入口开关 ---
+    val xiaomiDevice = remember { FeatureEntryConfig.isXiaomiOrRedmiDevice() }
+    val appleMusicInstalled = remember(context) {
+        FeatureEntryConfig.isAppleMusicInstalled(context)
+    }
+    var superIslandEntryEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_SUPER_ISLAND, xiaomiDevice)
+        )
+    }
+    var aodLyricsEntryEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_AOD_LYRICS, xiaomiDevice)
+        )
+    }
+    var appleMusicEntryEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_APPLE_MUSIC, appleMusicInstalled)
+        )
+    }
+    // 关闭入口等于停用对应功能：功能自身开关在关闭期间暂存并置为停用，重新打开入口后原样恢复，
+    // 因此关闭入口不会丢失关闭前的设置。
+    val toggleFeatureEntry: (String, Boolean, (Boolean) -> Unit, String?) -> Unit =
+        { entryKey, enabled, onChanged, featureKey ->
+            onChanged(enabled)
+            prefs.edit { putBoolean(entryKey, enabled) }
+            // 同步到宿主进程，入口状态改变后功能立即生效/停用。
+            PrefsBridge.putBoolean(entryKey, enabled)
+            if (featureKey != null) {
+                val stashKey = FeatureEntryGate.stashKey(featureKey)
+                val stashedValue = if (prefs.contains(stashKey)) {
+                    prefs.getBoolean(stashKey, false)
+                } else {
+                    null
+                }
+                val outcome = FeatureEntryGate.resolveOnEntryToggle(
+                    entryEnabled = enabled,
+                    currentFeatureValue = prefs.getBoolean(featureKey, false),
+                    stashedValue = stashedValue,
+                )
+                outcome.featureValue?.let { value ->
+                    prefs.edit { putBoolean(featureKey, value) }
+                    PrefsBridge.putBoolean(featureKey, value)
+                }
+                outcome.stashValue?.let { value ->
+                    prefs.edit { putBoolean(stashKey, value) }
+                }
+                if (outcome.clearStash) {
+                    prefs.edit { remove(stashKey) }
+                }
+            }
+        }
+    // 主页是否保留：两个米系入口至少有一个开启。主页保留时不在设置页重复列出它的内容。
+    val homePageVisible = MainTabPolicy.isHomePageVisible(
+        superIslandEntryEnabled = superIslandEntryEnabled,
+        aodLyricsEntryEnabled = aodLyricsEntryEnabled,
+    )
+
     Scaffold(
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
         topBar = {
@@ -236,16 +308,116 @@ fun SettingsPage() {
                             "hyperlyricsenhanced_all_logs_$dateTime.txt"
                         )
                     },
+                    lyricHookSwitches = lyricHookSwitches,
+                    showMigratedHomeSections = !homePageVisible,
+                    superIslandEntryEnabled = superIslandEntryEnabled,
+                    onSuperIslandEntryToggle = { enabled ->
+                        toggleFeatureEntry(
+                            UIConstants.KEY_FEATURE_ENTRY_SUPER_ISLAND,
+                            enabled,
+                            { superIslandEntryEnabled = it },
+                            RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
+                        )
+                    },
+                    aodLyricsEntryEnabled = aodLyricsEntryEnabled,
+                    onAodLyricsEntryToggle = { enabled ->
+                        toggleFeatureEntry(
+                            UIConstants.KEY_FEATURE_ENTRY_AOD_LYRICS,
+                            enabled,
+                            { aodLyricsEntryEnabled = it },
+                            RootConstants.KEY_HOOK_ENABLE_AOD_LYRICS,
+                        )
+                    },
+                    appleMusicEntryEnabled = appleMusicEntryEnabled,
+                    onAppleMusicEntryToggle = { enabled ->
+                        toggleFeatureEntry(
+                            UIConstants.KEY_FEATURE_ENTRY_APPLE_MUSIC,
+                            enabled,
+                            { appleMusicEntryEnabled = it },
+                            null,
+                        )
+                    },
                 )
             }
         }
     }
+
+    LyricHookPermissionSheet(controller = lyricHookSwitches)
 }
 
 private fun LazyListScope.settingsSections(
     backupRestoreHelper: com.juren233.hyperlyricsenhanced.utils.BackupRestoreHelper,
     onExportAllLogs: () -> Unit,
+    lyricHookSwitches: LyricHookSwitchController,
+    showMigratedHomeSections: Boolean,
+    superIslandEntryEnabled: Boolean,
+    onSuperIslandEntryToggle: (Boolean) -> Unit,
+    aodLyricsEntryEnabled: Boolean,
+    onAodLyricsEntryToggle: (Boolean) -> Unit,
+    appleMusicEntryEnabled: Boolean,
+    onAppleMusicEntryToggle: (Boolean) -> Unit,
 ) {
+    // 主页被隐藏（两个米系入口都关闭）时，主页的歌词设置、通知型灵动岛歌词与特殊功能迁到设置页顶部；
+    // 主页仍保留时这些内容留在主页，设置页不重复列出。
+    if (showMigratedHomeSections) {
+        item(key = "global_features_title") {
+            SmallTitle(text = stringResource(R.string.title_global_features))
+        }
+        item(key = "lyric_settings") {
+            val navigator = LocalNavigator.current
+            Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
+                ArrowPreference(
+                    title = stringResource(R.string.title_lyric_settings),
+                    onClick = { navigator.navigate(Route.LyricSettings) },
+                )
+            }
+        }
+        item(key = "dynamic_island_lyrics") {
+            val navigator = LocalNavigator.current
+            Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
+                Column {
+                    SwitchPreference(
+                        title = stringResource(R.string.title_dynamic_island_lyrics),
+                        summary = stringResource(R.string.summary_dynamic_island_lyrics),
+                        checked = lyricHookSwitches.enableDynamicIsland,
+                        onCheckedChange = lyricHookSwitches::onDynamicIslandToggle,
+                    )
+                    AnimatedVisibility(visible = lyricHookSwitches.enableDynamicIsland) {
+                        ArrowPreference(
+                            title = stringResource(R.string.title_dynamic_island_config),
+                            onClick = { navigator.navigate(Route.DynamicIslandNotification) },
+                        )
+                    }
+                }
+            }
+        }
+        item(key = "special_features_title") {
+            SmallTitle(text = stringResource(R.string.title_special_features))
+        }
+        item(key = "special_features_content") {
+            Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
+                Column {
+                    SwitchPreference(
+                        title = stringResource(R.string.title_unlock_island_length),
+                        checked = lyricHookSwitches.unlockIslandLength,
+                        onCheckedChange = lyricHookSwitches::onUnlockIslandLengthToggle,
+                    )
+                    SwitchPreference(
+                        title = stringResource(R.string.title_remove_focus_whitelist),
+                        summary = stringResource(R.string.summary_remove_focus_whitelist),
+                        checked = lyricHookSwitches.removeFocusWhitelist,
+                        onCheckedChange = lyricHookSwitches::onRemoveFocusWhitelistToggle,
+                    )
+                    SwitchPreference(
+                        title = stringResource(R.string.title_remove_island_whitelist),
+                        checked = lyricHookSwitches.removeIslandWhitelist,
+                        onCheckedChange = lyricHookSwitches::onRemoveIslandWhitelistToggle,
+                    )
+                }
+            }
+        }
+    }
+
     item(key = "personalization_title") {
         SmallTitle(text = stringResource(R.string.title_personalization))
     }
@@ -328,6 +500,31 @@ private fun LazyListScope.settingsSections(
                         },
                     )
                 }
+            }
+        }
+    }
+    item(key = "feature_entries_title") {
+        // 该分组统称“功能开关”（原“功能入口”）。
+        SmallTitle(text = stringResource(R.string.title_feature_switches))
+    }
+    item(key = "feature_entries_content") {
+        Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
+            Column {
+                SwitchPreference(
+                    title = stringResource(R.string.title_feature_entry_super_island),
+                    checked = superIslandEntryEnabled,
+                    onCheckedChange = onSuperIslandEntryToggle,
+                )
+                SwitchPreference(
+                    title = stringResource(R.string.title_feature_entry_aod_lyrics),
+                    checked = aodLyricsEntryEnabled,
+                    onCheckedChange = onAodLyricsEntryToggle,
+                )
+                SwitchPreference(
+                    title = stringResource(R.string.title_feature_entry_apple_music),
+                    checked = appleMusicEntryEnabled,
+                    onCheckedChange = onAppleMusicEntryToggle,
+                )
             }
         }
     }

@@ -3,6 +3,10 @@ package com.juren233.hyperlyricsenhanced.ui.page.hooksettings
 import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +48,7 @@ import androidx.core.net.toUri
 import com.juren233.hyperlyricsenhanced.R
 import com.juren233.hyperlyricsenhanced.common.PrefsBridge
 import com.juren233.hyperlyricsenhanced.common.RootConstants
+import com.juren233.hyperlyricsenhanced.provider.OfficialProviderAcquisitionLog
 import com.juren233.hyperlyricsenhanced.provider.OfficialProviderCatalog
 import com.juren233.hyperlyricsenhanced.provider.OfficialProviderInstaller
 import com.juren233.hyperlyricsenhanced.provider.OfficialProviderItem
@@ -54,6 +59,8 @@ import com.juren233.hyperlyricsenhanced.ui.component.SuperSwitchPreference
 import com.juren233.hyperlyricsenhanced.ui.component.TagComponent
 import com.juren233.hyperlyricsenhanced.ui.navigation.LocalNavigator
 import com.juren233.hyperlyricsenhanced.ui.navigation.Route
+import com.juren233.hyperlyricsenhanced.ui.page.main.OneTapRefreshHost
+import com.juren233.hyperlyricsenhanced.ui.page.main.rememberOneTapRefreshController
 import com.juren233.hyperlyricsenhanced.ui.utils.BlurredBar
 import com.juren233.hyperlyricsenhanced.ui.utils.pageScrollModifiers
 import com.juren233.hyperlyricsenhanced.ui.utils.rememberBlurBackdrop
@@ -68,6 +75,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -88,6 +96,7 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -106,6 +115,9 @@ fun LyricProviderPage() {
     val pullToRefreshState = rememberPullToRefreshState()
     var isManualRefreshing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    // 插件更新、添加、移除、修复完成后，右下角提供一键刷新入口（与主页顶栏同一组件）。
+    val oneTapRefresh = rememberOneTapRefreshController(snackbarHostState)
+    var showRefreshFab by remember { mutableStateOf(false) }
     val changeAppliedFormat = stringResource(R.string.provider_change_applied)
     val changeAppliedSystemUiMessage = stringResource(
         R.string.provider_change_applied_system_ui,
@@ -163,6 +175,7 @@ fun LyricProviderPage() {
                 it.copy(busyPluginIds = it.busyPluginIds + item.catalog.id)
             }
             coroutineScope.launch {
+                OfficialProviderAcquisitionLog.info("开始更新插件: id=${item.catalog.id}")
                 runCatching {
                     OfficialProviderRepository.downloadAndInstall(context, item)
                 }.onSuccess { manifest ->
@@ -182,6 +195,7 @@ fun LyricProviderPage() {
                             busyPluginIds = state.busyPluginIds - item.catalog.id,
                         )
                     }
+                    showRefreshFab = true
                     snackbarHostState.showSnackbar(
                         message = if (item.usesSystemMediaRuntime()) {
                             updateSuccessSystemUiMessage
@@ -191,6 +205,10 @@ fun LyricProviderPage() {
                         duration = SnackbarDuration.Custom(2500L),
                     )
                 }.onFailure { error ->
+                    OfficialProviderAcquisitionLog.error(
+                        "插件更新失败: id=${item.catalog.id} " +
+                            "error=${OfficialProviderAcquisitionLog.describe(error)}",
+                    )
                     officialUiStateFlow.update {
                         it.copy(busyPluginIds = it.busyPluginIds - item.catalog.id)
                     }
@@ -212,6 +230,7 @@ fun LyricProviderPage() {
                 it.copy(busyPluginIds = it.busyPluginIds + item.catalog.id)
             }
             coroutineScope.launch {
+                OfficialProviderAcquisitionLog.info("开始修复插件: id=${item.catalog.id}")
                 runCatching {
                     OfficialProviderRepository.repair(context, item)
                 }.onSuccess { manifest ->
@@ -232,6 +251,7 @@ fun LyricProviderPage() {
                             busyPluginIds = state.busyPluginIds - item.catalog.id,
                         )
                     }
+                    showRefreshFab = true
                     snackbarHostState.showSnackbar(
                         message = if (item.usesSystemMediaRuntime()) {
                             repairSuccessSystemUiMessage
@@ -241,6 +261,10 @@ fun LyricProviderPage() {
                         duration = SnackbarDuration.Custom(2500L),
                     )
                 }.onFailure { error ->
+                    OfficialProviderAcquisitionLog.error(
+                        "插件修复失败: id=${item.catalog.id} " +
+                            "error=${OfficialProviderAcquisitionLog.describe(error)}",
+                    )
                     officialUiStateFlow.update {
                         it.copy(busyPluginIds = it.busyPluginIds - item.catalog.id)
                     }
@@ -263,6 +287,7 @@ fun LyricProviderPage() {
                 state.copy(items = state.items.filterNot { it.catalog.id == item.catalog.id })
             }
         }.onSuccess {
+            showRefreshFab = true
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(
                     message = removeSuccessMessage,
@@ -270,6 +295,10 @@ fun LyricProviderPage() {
                 )
             }
         }.onFailure { error ->
+            OfficialProviderAcquisitionLog.error(
+                "插件移除失败: id=${item.catalog.id} " +
+                    "error=${OfficialProviderAcquisitionLog.describe(error)}",
+            )
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(
                     message = removeFailedFormat.replace(
@@ -284,6 +313,21 @@ fun LyricProviderPage() {
 
     Scaffold(
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
+        floatingActionButton = {
+            AnimatedVisibility(
+                visible = showRefreshFab,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
+            ) {
+                FloatingActionButton(onClick = { oneTapRefresh.open() }) {
+                    Icon(
+                        imageVector = MiuixIcons.Refresh,
+                        contentDescription = stringResource(R.string.title_one_tap_refresh),
+                        tint = MiuixTheme.colorScheme.onPrimary,
+                    )
+                }
+            }
+        },
         topBar = {
             BlurredBar(backdrop, blurActive) {
                 TopAppBar(
@@ -366,6 +410,8 @@ fun LyricProviderPage() {
             }
         }
     }
+
+    OneTapRefreshHost(controller = oneTapRefresh)
 }
 
 @Composable
@@ -382,6 +428,9 @@ fun OfficialProviderDownloadPage() {
     val pullToRefreshState = rememberPullToRefreshState()
     var isManualRefreshing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    // 插件添加完成后同样提供一键刷新入口。
+    val oneTapRefresh = rememberOneTapRefreshController(snackbarHostState)
+    var showRefreshFab by remember { mutableStateOf(false) }
     val addSuccessFormat = stringResource(R.string.provider_add_success)
     val addSuccessSystemUiMessage = stringResource(R.string.provider_add_success_system_ui)
     val unknownText = stringResource(R.string.unknown)
@@ -396,10 +445,12 @@ fun OfficialProviderDownloadPage() {
         if (item.catalog.id !in stateFlow.value.busyPluginIds) {
             stateFlow.update { it.copy(busyPluginIds = it.busyPluginIds + item.catalog.id) }
             coroutineScope.launch {
+                OfficialProviderAcquisitionLog.info("开始添加插件: id=${item.catalog.id}")
                 runCatching {
                     OfficialProviderRepository.downloadAndInstall(context, item)
                     refreshOfficialProviders(context, stateFlow)
                 }.onSuccess {
+                    showRefreshFab = true
                     snackbarHostState.showSnackbar(
                         message = if (item.usesSystemMediaRuntime()) {
                             addSuccessSystemUiMessage
@@ -409,6 +460,10 @@ fun OfficialProviderDownloadPage() {
                         duration = SnackbarDuration.Custom(2500L),
                     )
                 }.onFailure { error ->
+                    OfficialProviderAcquisitionLog.error(
+                        "插件添加失败: id=${item.catalog.id} " +
+                            "error=${OfficialProviderAcquisitionLog.describe(error)}",
+                    )
                     stateFlow.update {
                         it.copy(
                             busyPluginIds = it.busyPluginIds - item.catalog.id,
@@ -429,6 +484,21 @@ fun OfficialProviderDownloadPage() {
 
     Scaffold(
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
+        floatingActionButton = {
+            AnimatedVisibility(
+                visible = showRefreshFab,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
+            ) {
+                FloatingActionButton(onClick = { oneTapRefresh.open() }) {
+                    Icon(
+                        imageVector = MiuixIcons.Refresh,
+                        contentDescription = stringResource(R.string.title_one_tap_refresh),
+                        tint = MiuixTheme.colorScheme.onPrimary,
+                    )
+                }
+            }
+        },
         topBar = {
             BlurredBar(backdrop, blurActive) {
                 TopAppBar(
@@ -559,9 +629,9 @@ fun OfficialProviderDownloadPage() {
                                             } else {
                                                 MiuixTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                             },
-                                            fontSize = 14.sp,
-                                        )
-                                    },
+                                           fontSize = 14.sp,
+                                       )
+                                   },
                                     enabled = !busy && item.catalog.available,
                                 )
                             }
@@ -571,4 +641,6 @@ fun OfficialProviderDownloadPage() {
             }
         }
     }
+
+    OneTapRefreshHost(controller = oneTapRefresh)
 }

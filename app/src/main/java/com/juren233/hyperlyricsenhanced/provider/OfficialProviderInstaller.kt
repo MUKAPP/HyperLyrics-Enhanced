@@ -15,6 +15,11 @@ object OfficialProviderInstaller {
     fun install(context: Context, packBytes: ByteArray): ProviderPackManifest {
         val verified = ProviderPackVerifier.verify(packBytes)
         val manifest = verified.manifest
+        OfficialProviderAcquisitionLog.info(
+            "插件校验通过: id=${manifest.pluginId} version=${manifest.versionCode} " +
+                "name=${manifest.versionName} targets=${manifest.targetPackages.joinToString()} " +
+                "packBytes=${packBytes.size}",
+        )
         val remoteName = OfficialProviderCatalog.remoteFileName(
             manifest.pluginId,
             manifest.versionCode,
@@ -40,6 +45,9 @@ object OfficialProviderInstaller {
             )
         }
         OfficialProviderScopeManager.requestPluginScopes(manifest.pluginId)
+        OfficialProviderAcquisitionLog.info(
+            "插件已写入并启用: id=${manifest.pluginId} remoteFile=$remoteName",
+        )
         return manifest
     }
 
@@ -90,13 +98,37 @@ object OfficialProviderInstaller {
             } else {
                 File(context.filesDir, remoteName).takeIf(File::isFile)?.readBytes()
             }
-        }.getOrNull() ?: return null
-
-        return runCatching {
-            ProviderPackVerifier.verify(packBytes).manifest
-        }.getOrNull()?.takeIf { manifest ->
-            manifest.pluginId == pluginId && manifest.versionCode == versionCode
+        }.onFailure { error ->
+            OfficialProviderAcquisitionLog.warn(
+                "已安装插件读取异常: id=$pluginId version=$versionCode file=$remoteName " +
+                    "error=${OfficialProviderAcquisitionLog.describe(error)}",
+            )
+        }.getOrNull()
+        if (packBytes == null) {
+            OfficialProviderAcquisitionLog.warn(
+                "已安装插件文件缺失，页面将提示修复: id=$pluginId version=$versionCode " +
+                    "file=$remoteName",
+            )
+            return null
         }
+
+        val manifest = runCatching {
+            ProviderPackVerifier.verify(packBytes).manifest
+        }.onFailure { error ->
+            OfficialProviderAcquisitionLog.warn(
+                "已安装插件校验失败，页面将提示修复: id=$pluginId version=$versionCode " +
+                    "error=${OfficialProviderAcquisitionLog.describe(error)}",
+            )
+        }.getOrNull() ?: return null
+        if (manifest.pluginId != pluginId || manifest.versionCode != versionCode) {
+            OfficialProviderAcquisitionLog.warn(
+                "已安装插件与本地记录不一致，页面将提示修复: " +
+                    "记录(id=$pluginId version=$versionCode) " +
+                    "实际(id=${manifest.pluginId} version=${manifest.versionCode})",
+            )
+            return null
+        }
+        return manifest
     }
 
     private fun writeRemoteFile(context: Context, remoteName: String, packBytes: ByteArray) {
@@ -110,9 +142,15 @@ object OfficialProviderInstaller {
                 require(current.contentEquals(packBytes)) {
                     "同一 Provider 版本对应了不同内容"
                 }
+                OfficialProviderAcquisitionLog.info(
+                    "插件文件已存在且内容一致，跳过写入: name=$remoteName bytes=${packBytes.size}",
+                )
                 return
             }
 
+            OfficialProviderAcquisitionLog.info(
+                "插件写入 Remote Files: name=$remoteName bytes=${packBytes.size}",
+            )
             service.openRemoteFile(remoteName).use { pfd ->
                 android.os.ParcelFileDescriptor.AutoCloseOutputStream(pfd).use { output ->
                     output.write(packBytes)
@@ -128,6 +166,9 @@ object OfficialProviderInstaller {
             return
         }
 
+        OfficialProviderAcquisitionLog.info(
+            "插件写入应用私有目录: name=$remoteName bytes=${packBytes.size}",
+        )
         val target = File(context.filesDir, remoteName)
         val temporary = File(context.filesDir, "$remoteName.tmp")
         temporary.outputStream().use { it.write(packBytes) }

@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import com.juren233.hyperlyricsenhanced.common.FeatureEntryConfig
+import com.juren233.hyperlyricsenhanced.common.FeatureEntryInitializer
 import com.juren233.hyperlyricsenhanced.common.LogLevelPolicy
 import com.juren233.hyperlyricsenhanced.common.PreferenceDiagnostics
 import com.juren233.hyperlyricsenhanced.common.PrefsBridge
@@ -26,6 +28,7 @@ class RootApplication : Application() {
         LogManager.init(this)
         PrefsBridge.init(this)
         appContext = this
+        initializeFeatureEntries()
 
         XposedServiceHelper.registerListener(object : XposedServiceHelper.OnServiceListener {
             override fun onServiceBind(service: XposedService) {
@@ -55,6 +58,30 @@ class RootApplication : Application() {
             )
             .putString(UIConstants.KEY_LOG_LEVEL_BUILD_KIND, currentBuildKind)
             .commit()
+    }
+
+    /**
+     * 功能开关的一次性初始化。
+     *
+     * 仅在首次安装、或首次升级到带功能入口的版本时生效；已经存在的入口值（含用户手动开启的）
+     * 不会被改写，因此后续版本更新不会再自动关闭这些入口。
+     *
+     * Apple Music 入口是例外：安装或卸载 Apple Music 时重新触发一次自动开关
+     * （见 [FeatureEntryInitializer.syncAppleMusicEntryWithInstallState]），状态没变化时保持用户设置。
+     * 写入后同步到宿主进程，使系统界面等进程立即读到新的入口与功能开关状态。
+     */
+    private fun initializeFeatureEntries() {
+        val prefs = getSharedPreferences(UIConstants.PREF_NAME, Context.MODE_PRIVATE)
+        val appleMusicInstalled = FeatureEntryConfig.isAppleMusicInstalled(this)
+        val writes = FeatureEntryInitializer.applyOnce(
+            prefs = prefs,
+            xiaomiDevice = FeatureEntryConfig.isXiaomiOrRedmiDevice(),
+            appleMusicInstalled = appleMusicInstalled,
+        ) + FeatureEntryInitializer.syncAppleMusicEntryWithInstallState(
+            prefs = prefs,
+            appleMusicInstalled = appleMusicInstalled,
+        )
+        writes.forEach { (key, value) -> PrefsBridge.putBoolean(key, value) }
     }
 
     companion object {

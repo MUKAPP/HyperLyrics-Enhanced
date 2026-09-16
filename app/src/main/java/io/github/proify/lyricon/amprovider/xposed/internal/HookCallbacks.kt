@@ -8,7 +8,22 @@ package io.github.proify.lyricon.amprovider.xposed.internal
 
 import io.github.libxposed.api.XposedInterface.Chain
 import io.github.libxposed.api.XposedInterface.Hooker
+import io.github.proify.lyricon.amprovider.xposed.AppleMusicOptimizationGate
 import io.github.proify.lyricon.amprovider.xposed.ProviderLogger
+
+/**
+ * 入口门控：Apple Music 体验优化入口关闭时，Hook 回调直接走原生实现。
+ */
+internal class EntryGatedHooker(
+    private val delegate: Hooker,
+) : Hooker {
+    override fun intercept(chain: Chain): Any? =
+        if (AppleMusicOptimizationGate.isEnabled()) {
+            delegate.intercept(chain)
+        } else {
+            chain.proceed()
+        }
+}
 
 internal class CallbackHook(
     private val before: ((Chain) -> Unit)?,

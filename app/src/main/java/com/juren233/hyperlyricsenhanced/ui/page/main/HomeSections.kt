@@ -10,6 +10,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.juren233.hyperlyricsenhanced.R
 import com.juren233.hyperlyricsenhanced.ui.component.EnhancedVersionNotice
+import com.juren233.hyperlyricsenhanced.ui.component.LyricHookSwitchController
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -17,25 +18,19 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
 
 fun LazyListScope.homePageSections(
     availableUpdateVersion: String?,
+    showSuperIslandEntry: Boolean,
+    showAodLyricsEntry: Boolean,
+    lyricHookSwitches: LyricHookSwitchController,
     enableSuperIsland: Boolean,
     onSuperIslandToggle: (Boolean) -> Unit,
-    enableDynamicIsland: Boolean,
-    onDynamicIslandToggle: (Boolean) -> Unit,
     enableAodLyrics: Boolean,
     onAodLyricsToggle: (Boolean) -> Unit,
     onSuperIslandConfigClick: () -> Unit,
     onMediaCardConfigClick: () -> Unit,
+    onLyricSettingsClick: () -> Unit,
     onDynamicIslandConfigClick: () -> Unit,
     onLockScreenAodConfigClick: () -> Unit,
     onClassicAodConfigClick: () -> Unit,
-    onLyricSettingsClick: () -> Unit,
-    removeFocusWhitelist: Boolean,
-    onRemoveFocusWhitelistToggle: (Boolean) -> Unit,
-    removeIslandWhitelist: Boolean,
-    onRemoveIslandWhitelistToggle: (Boolean) -> Unit,
-    unlockIslandLength: Boolean,
-    onUnlockIslandLengthToggle: (Boolean) -> Unit,
-    onAppSettingsClick: () -> Unit,
 ) {
     item(key = "enhanced_version_notice") {
         EnhancedVersionNotice(
@@ -59,7 +54,7 @@ fun LazyListScope.homePageSections(
         }
     }
 
-    item(key = "basic_features_content_system_ui") {
+    if (showSuperIslandEntry) item(key = "basic_features_content_system_ui") {
         Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
             Column {
                 SwitchPreference(
@@ -84,7 +79,7 @@ fun LazyListScope.homePageSections(
         }
     }
 
-    item(key = "basic_features_content_aod_lyrics") {
+    if (showAodLyricsEntry) item(key = "basic_features_content_aod_lyrics") {
         Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
             Column {
                 SwitchPreference(
@@ -115,10 +110,10 @@ fun LazyListScope.homePageSections(
                 SwitchPreference(
                     title = stringResource(R.string.title_dynamic_island_lyrics),
                     summary = stringResource(R.string.summary_dynamic_island_lyrics),
-                    checked = enableDynamicIsland,
-                    onCheckedChange = onDynamicIslandToggle,
+                    checked = lyricHookSwitches.enableDynamicIsland,
+                    onCheckedChange = lyricHookSwitches::onDynamicIslandToggle,
                 )
-                AnimatedVisibility(visible = enableDynamicIsland) {
+                AnimatedVisibility(visible = lyricHookSwitches.enableDynamicIsland) {
                     ArrowPreference(
                         title = stringResource(R.string.title_dynamic_island_config),
                         onClick = onDynamicIslandConfigClick,
@@ -139,31 +134,21 @@ fun LazyListScope.homePageSections(
             Column {
                 SwitchPreference(
                     title = stringResource(R.string.title_unlock_island_length),
-                    checked = unlockIslandLength,
-                    onCheckedChange = onUnlockIslandLengthToggle,
+                    checked = lyricHookSwitches.unlockIslandLength,
+                    onCheckedChange = lyricHookSwitches::onUnlockIslandLengthToggle,
                 )
                 SwitchPreference(
                     title = stringResource(R.string.title_remove_focus_whitelist),
                     summary = stringResource(R.string.summary_remove_focus_whitelist),
-                    checked = removeFocusWhitelist,
-                    onCheckedChange = onRemoveFocusWhitelistToggle,
+                    checked = lyricHookSwitches.removeFocusWhitelist,
+                    onCheckedChange = lyricHookSwitches::onRemoveFocusWhitelistToggle,
                 )
                 SwitchPreference(
                     title = stringResource(R.string.title_remove_island_whitelist),
-                    checked = removeIslandWhitelist,
-                    onCheckedChange = onRemoveIslandWhitelistToggle,
+                    checked = lyricHookSwitches.removeIslandWhitelist,
+                    onCheckedChange = lyricHookSwitches::onRemoveIslandWhitelistToggle,
                 )
             }
-        }
-    }
-
-    item(key = "app_settings") {
-        Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
-            ArrowPreference(
-                title = stringResource(R.string.title_app_settings),
-                summary = stringResource(R.string.summary_app_settings),
-                onClick = onAppSettingsClick,
-            )
         }
     }
 }

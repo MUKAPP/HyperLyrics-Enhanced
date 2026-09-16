@@ -50,6 +50,7 @@ import androidx.core.net.toUri
 import com.juren233.hyperlyricsenhanced.R
 import com.juren233.hyperlyricsenhanced.common.PrefsBridge
 import com.juren233.hyperlyricsenhanced.common.RootConstants
+import com.juren233.hyperlyricsenhanced.provider.OfficialProviderAcquisitionLog
 import com.juren233.hyperlyricsenhanced.provider.OfficialProviderCatalog
 import com.juren233.hyperlyricsenhanced.provider.OfficialProviderInstaller
 import com.juren233.hyperlyricsenhanced.provider.OfficialProviderItem
@@ -118,7 +119,13 @@ internal suspend fun refreshInstalledProviderUpdates(
     context: Context,
     stateFlow: MutableStateFlow<OfficialProviderUiState>,
 ) {
-    val remoteItems = runCatching { OfficialProviderRepository.loadItems(context) }.getOrNull() ?: return
+    val remoteItems = runCatching { OfficialProviderRepository.loadItems(context) }
+        .onFailure { error ->
+            OfficialProviderAcquisitionLog.warn(
+                "检查已安装插件更新失败: error=${OfficialProviderAcquisitionLog.describe(error)}",
+            )
+        }
+        .getOrNull() ?: return
     val remoteById = remoteItems.associateBy { it.catalog.id }
     stateFlow.update { state ->
         state.copy(
@@ -717,6 +724,9 @@ internal suspend fun refreshOfficialProviders(
             )
         }
     }.onFailure { error ->
+        OfficialProviderAcquisitionLog.error(
+            "插件目录刷新失败: error=${OfficialProviderAcquisitionLog.describe(error)}",
+        )
         stateFlow.update {
             it.copy(
                 isLoading = false,

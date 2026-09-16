@@ -14,6 +14,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.juren233.hyperlyricsenhanced.R
+import com.juren233.hyperlyricsenhanced.ui.component.AppSettingsIconButton
+import com.juren233.hyperlyricsenhanced.ui.component.CompactBarTitle
+import com.juren233.hyperlyricsenhanced.ui.component.LyricHookSwitchController
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -32,25 +35,20 @@ import com.juren233.hyperlyricsenhanced.ui.utils.rememberBlurBackdrop
 fun HomePage(
     outerPadding: PaddingValues,
     availableUpdateVersion: String?,
+    showSuperIslandEntry: Boolean,
+    showAodLyricsEntry: Boolean,
+    lyricHookSwitches: LyricHookSwitchController,
     enableSuperIsland: Boolean,
     onSuperIslandToggle: (Boolean) -> Unit,
-    enableDynamicIsland: Boolean,
-    onDynamicIslandToggle: (Boolean) -> Unit,
     enableAodLyrics: Boolean,
     onAodLyricsToggle: (Boolean) -> Unit,
     onSuperIslandConfigClick: () -> Unit,
     onMediaCardConfigClick: () -> Unit,
+    onLyricSettingsClick: () -> Unit,
     onDynamicIslandConfigClick: () -> Unit,
     onLockScreenAodConfigClick: () -> Unit,
     onClassicAodConfigClick: () -> Unit,
-    onLyricSettingsClick: () -> Unit,
     onRefreshClick: () -> Unit,
-    removeFocusWhitelist: Boolean,
-    onRemoveFocusWhitelistToggle: (Boolean) -> Unit,
-    removeIslandWhitelist: Boolean,
-    onRemoveIslandWhitelistToggle: (Boolean) -> Unit,
-    unlockIslandLength: Boolean,
-    onUnlockIslandLengthToggle: (Boolean) -> Unit,
     onAppSettingsClick: () -> Unit,
 ) {
     val backdrop = rememberBlurBackdrop()
@@ -62,20 +60,26 @@ fun HomePage(
     Scaffold(
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
-                    color = barColor,
-                    title = "HyperLyrics Enhanced",
-                    scrollBehavior = topAppBarScrollBehavior,
-                    actions = {
-                        IconButton(onClick = onRefreshClick) {
-                            Icon(
-                                imageVector = MiuixIcons.Refresh,
-                                contentDescription = stringResource(R.string.title_one_tap_refresh),
-                                modifier = Modifier.size(26.dp),
-                            )
-                        }
-                    },
-                )
+                // 顶栏左右都有按钮时，收起标题用略小字号。
+                CompactBarTitle {
+                    TopAppBar(
+                        color = barColor,
+                        title = "HyperLyrics Enhanced",
+                        scrollBehavior = topAppBarScrollBehavior,
+                        navigationIcon = {
+                            AppSettingsIconButton(onClick = onAppSettingsClick)
+                        },
+                        actions = {
+                            IconButton(onClick = onRefreshClick) {
+                                Icon(
+                                    imageVector = MiuixIcons.Refresh,
+                                    contentDescription = stringResource(R.string.title_one_tap_refresh),
+                                    modifier = Modifier.size(26.dp),
+                                )
+                            }
+                        },
+                    )
+                }
             }
         }
     ) { innerPadding ->
@@ -99,25 +103,19 @@ fun HomePage(
             ) {
                 homePageSections(
                     availableUpdateVersion = availableUpdateVersion,
+                    showSuperIslandEntry = showSuperIslandEntry,
+                    showAodLyricsEntry = showAodLyricsEntry,
+                    lyricHookSwitches = lyricHookSwitches,
                     enableSuperIsland = enableSuperIsland,
                     onSuperIslandToggle = onSuperIslandToggle,
-                    enableDynamicIsland = enableDynamicIsland,
-                    onDynamicIslandToggle = onDynamicIslandToggle,
                     enableAodLyrics = enableAodLyrics,
                     onAodLyricsToggle = onAodLyricsToggle,
                     onSuperIslandConfigClick = onSuperIslandConfigClick,
                     onMediaCardConfigClick = onMediaCardConfigClick,
+                    onLyricSettingsClick = onLyricSettingsClick,
                     onDynamicIslandConfigClick = onDynamicIslandConfigClick,
                     onLockScreenAodConfigClick = onLockScreenAodConfigClick,
                     onClassicAodConfigClick = onClassicAodConfigClick,
-                    onLyricSettingsClick = onLyricSettingsClick,
-                    removeFocusWhitelist = removeFocusWhitelist,
-                    onRemoveFocusWhitelistToggle = onRemoveFocusWhitelistToggle,
-                    removeIslandWhitelist = removeIslandWhitelist,
-                    onRemoveIslandWhitelistToggle = onRemoveIslandWhitelistToggle,
-                    unlockIslandLength = unlockIslandLength,
-                    onUnlockIslandLengthToggle = onUnlockIslandLengthToggle,
-                    onAppSettingsClick = onAppSettingsClick,
                 )
             }
         }

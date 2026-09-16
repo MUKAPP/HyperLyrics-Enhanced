@@ -16,6 +16,7 @@ import io.github.proify.lyricon.amprovider.xposed.internal.ArgumentRewriteHook
 import io.github.proify.lyricon.amprovider.xposed.internal.CallbackHook
 import io.github.proify.lyricon.amprovider.xposed.internal.ConditionalSkipHook
 import io.github.proify.lyricon.amprovider.xposed.internal.ConditionalVoidSkipHook
+import io.github.proify.lyricon.amprovider.xposed.internal.EntryGatedHooker
 import io.github.proify.lyricon.amprovider.xposed.internal.ResultOverrideHook
 import io.github.proify.lyricon.amprovider.xposed.internal.ScopedCallbackHook
 import java.lang.reflect.Executable
@@ -49,7 +50,8 @@ internal class AppleHookRegistrar(
         executable: Executable,
         before: ((Chain) -> Unit)? = null,
         after: ((Chain, Any?) -> Unit)? = null,
-    ) = installHooker(executable, CallbackHook(before, after))
+        gated: Boolean = true,
+    ) = installHooker(executable, CallbackHook(before, after), gated = gated)
 
     fun installScopedHook(
         executable: Executable,
@@ -85,8 +87,10 @@ internal class AppleHookRegistrar(
         rewrite: (Chain) -> Array<Any?>?,
     ) = installHooker(executable, ArgumentRewriteHook(rewrite))
 
-    private fun installHooker(executable: Executable, hooker: Hooker) {
+    private fun installHooker(executable: Executable, hooker: Hooker, gated: Boolean = true) {
         val moduleId = activeModuleId.get() ?: "unscoped"
+        // 入口关闭时功能 Hook 一律让位给原生实现；安装本身保留，重新打开入口后立即恢复。
+        val effectiveHooker = if (gated) EntryGatedHooker(hooker) else hooker
         var current = executable
         var retried = false
         while (true) {
@@ -94,9 +98,9 @@ internal class AppleHookRegistrar(
                 runCatching { module.deoptimize(current) }
                 module.hook(current).intercept(
                     if (BuildConfig.DEBUG) {
-                        callbackTracer.wrap(moduleId, current, hooker)
+                        callbackTracer.wrap(moduleId, current, effectiveHooker)
                     } else {
-                        hooker
+                        effectiveHooker
                     },
                 )
                 AppleMusicDexKitWatchdog.hookInstalled(current)

@@ -20,6 +20,8 @@ internal fun AppleMusicProviderOrchestrator.initializeContentUiLanguage() {
     val prefs = runCatching {
         module.getRemotePreferences(UIConstants.PREF_NAME)
     }.getOrNull() ?: return
+    // 入口门控与各功能共享同一份远程偏好，入口状态变化后功能 Hook 立即让位/恢复。
+    AppleMusicOptimizationGate.attach(prefs)
     catalogLanguage.attachPreferences(prefs)
     AppleLyricTextTransform.initialize(application) {
         lyricsPlayback.lyricsHooks.isSimplifyTraditionalLyricsEnabled()

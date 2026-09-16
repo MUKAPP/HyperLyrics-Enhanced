@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -21,14 +22,19 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.juren233.hyperlyricsenhanced.R
 import com.juren233.hyperlyricsenhanced.common.RootConstants
+import com.juren233.hyperlyricsenhanced.ui.component.AppSettingsIconButton
 import com.juren233.hyperlyricsenhanced.ui.component.FloatRangeInputDialog
 import com.juren233.hyperlyricsenhanced.ui.component.NumberRangeInputDialog
 import com.juren233.hyperlyricsenhanced.ui.page.hooksettings.lyrics.common.XposedLyricSettingPage
 import com.juren233.hyperlyricsenhanced.ui.page.hooksettings.lyrics.common.rememberHookConfigSaver
 import com.juren233.hyperlyricsenhanced.ui.page.hooksettings.lyrics.common.rememberHookPrefs
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
@@ -38,6 +44,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun AppleMusicOptimizationPage(
     outerPadding: PaddingValues = PaddingValues(),
     showNavigationIcon: Boolean = true,
+    embeddedInMainPage: Boolean = false,
+    collapseTitleToAppName: Boolean = false,
+    showRefreshAction: Boolean = false,
+    onRefreshClick: () -> Unit = {},
+    onAppSettingsClick: () -> Unit = {},
 ) {
     val prefs = rememberHookPrefs()
     val saveConfig = rememberHookConfigSaver(prefs)
@@ -320,6 +331,29 @@ fun AppleMusicOptimizationPage(
         subtitle = stringResource(R.string.summary_apple_music_optimization_page),
         outerPadding = outerPadding,
         showNavigationIcon = showNavigationIcon,
+        // 仅当本页作为主页面首页（主页被隐藏）时，标题收回顶栏后只显示应用名；
+        // 主页仍在时保持原有的标题 + 副标题。
+        collapsedTitle = if (collapseTitleToAppName) stringResource(R.string.app_name) else null,
+        // 内嵌在主页面时左上角提供应用设置入口。
+        leadingContent = if (embeddedInMainPage) {
+            { AppSettingsIconButton(onClick = onAppSettingsClick) }
+        } else {
+            null
+        },
+        // 主页隐藏时本页即首页，顶栏右侧同样提供一键刷新入口。
+        trailingContent = if (showRefreshAction) {
+            {
+                IconButton(onClick = onRefreshClick) {
+                    Icon(
+                        imageVector = MiuixIcons.Refresh,
+                        contentDescription = stringResource(R.string.title_one_tap_refresh),
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+            }
+        } else {
+            null
+        },
     ) {
         item(key = "app_content_title") {
             SmallTitle(text = stringResource(R.string.title_apple_music_app_content))

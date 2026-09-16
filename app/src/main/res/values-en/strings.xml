@@ -44,6 +44,14 @@
     <string name="title_classic_aod">Classic AOD</string>
     <string name="title_dynamic_island_config">Notification Dynamic Island Lyrics Custom Configuration</string>
     <string name="title_special_features">Special Features</string>
+    <string name="title_global_features">Global Features</string>
+    <string name="title_feature_switches">Feature Switches</string>
+    <string name="title_feature_entry_super_island">Xiaomi Super Island Lyrics Entry</string>
+    <string name="title_feature_entry_aod_lyrics">Xiaomi AOD Lyrics Entry</string>
+    <string name="title_feature_entry_apple_music">Apple Music Optimization Entry</string>
+    <string name="title_unsupported_device">It seems your phone is not suitable for HyperLyrics Enhanced</string>
+    <string name="summary_unsupported_device">You can still enable entries in App Settings</string>
+    <string name="action_enter_app_settings">Enter App Settings</string>
     <string name="title_unlock_island_length">Unlock Super Island Length Limit</string>
     <string name="title_remove_focus_whitelist">Unlock Notification Spotlight Whitelist</string>
     <string name="summary_remove_focus_whitelist">Do not use with similar features from other modules</string>
