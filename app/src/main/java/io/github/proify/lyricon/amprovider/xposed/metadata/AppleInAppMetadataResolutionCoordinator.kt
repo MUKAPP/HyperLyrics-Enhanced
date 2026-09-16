@@ -121,6 +121,13 @@ internal class AppleInAppMetadataResolutionCoordinator(
                     forceRebind = true,
                     notifyModelChange = true,
                 )
+                if (shouldPublishAssociatedArtistAliasToCurrentPlayback(
+                        mediaId = mediaId,
+                        currentPlaybackMediaId = host.currentPlaybackMetadataId(),
+                    )
+                ) {
+                    host.publishCurrentPlaybackAlias(mediaId, updatedAlias)
+                }
             }
         }
     }

@@ -32,6 +32,8 @@ internal interface AppleInAppMetadataResolutionHost {
         notifyModelChange: Boolean,
     )
 
+    fun publishCurrentPlaybackAlias(mediaId: String, alias: Alias)
+
     fun applyPlaybackMetadataOverride(
         mediaId: String,
         alias: Alias,
@@ -57,6 +59,7 @@ internal class DefaultAppleInAppMetadataResolutionHost(
     private val refreshRequestScopeFn: () -> Unit,
     private val enrichLibraryEntitiesForResolutionFn: (Collection<String>) -> Unit,
     private val applyAliasToMetadataRefsFn: (String, Alias, Boolean, Boolean) -> Unit,
+    private val publishCurrentPlaybackAliasFn: (String, Alias) -> Unit,
     private val applyPlaybackMetadataOverrideFn: (
         String, Alias, Boolean, Boolean, Boolean, Boolean, Boolean, Boolean,
     ) -> Unit,
@@ -87,6 +90,10 @@ internal class DefaultAppleInAppMetadataResolutionHost(
         notifyModelChange: Boolean,
     ) {
         applyAliasToMetadataRefsFn(mediaId, alias, forceRebind, notifyModelChange)
+    }
+
+    override fun publishCurrentPlaybackAlias(mediaId: String, alias: Alias) {
+        publishCurrentPlaybackAliasFn(mediaId, alias)
     }
 
     override fun applyPlaybackMetadataOverride(

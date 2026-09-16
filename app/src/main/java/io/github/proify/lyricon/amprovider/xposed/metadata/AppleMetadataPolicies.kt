@@ -151,6 +151,11 @@ internal fun changedAssociatedArtistAlias(
     updatedAlias: Alias?,
 ): Alias? = updatedAlias?.takeIf { it != previousAlias }
 
+internal fun shouldPublishAssociatedArtistAliasToCurrentPlayback(
+    mediaId: String,
+    currentPlaybackMediaId: String?,
+): Boolean = mediaId.isNotBlank() && mediaId == currentPlaybackMediaId
+
 internal fun inAppLibraryControllerRefreshDelayMillis(
     strategy: InAppLibraryControllerBuildStrategy,
     lastBuildUptimeMillis: Long?,

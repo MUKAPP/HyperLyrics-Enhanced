@@ -60,6 +60,14 @@ internal fun selectCurrentPlaybackMediaId(
 ): String? = publishedMediaId?.takeIf(String::isNotBlank)
     ?: observedQueueMediaId?.takeIf(String::isNotBlank)
 
+internal fun metadataWithEffectiveDisplayAlias(
+    metadata: MediaMetadataCache.Metadata,
+    alias: Alias?,
+): MediaMetadataCache.Metadata = metadata.copy(
+    title = alias?.title?.takeIf(String::isNotBlank) ?: metadata.title,
+    artist = alias?.artist?.takeIf(String::isNotBlank) ?: metadata.artist,
+)
+
 /**
  * Owns the current Apple Music queue identity and the configured/original catalog resolution
  * lifecycle. UI model mutation remains in the host so this component cannot bypass surface,
@@ -161,11 +169,6 @@ internal class ApplePlaybackMetadataCoordinator(
                 host.ensureContentItemMetadataHooks(mediaItem.javaClass)
             }
             val previousMetadata = MediaMetadataCache.getMetadataById(mediaId)
-            MediaMetadataCache.put(metadata)
-            ProviderLogger.debug(
-                "歌曲元数据已更新：source=$source, id=${metadata.id}, " +
-                    "queueId=${metadata.queueId}, 标题=${metadata.title}"
-            )
             if (publishAsCurrent) {
                 val previousCurrentId = currentMediaId
                 currentMediaId = mediaId
@@ -175,29 +178,44 @@ internal class ApplePlaybackMetadataCoordinator(
                     playbackItem = mediaItem,
                     queueId = metadata.queueId,
                 )
-                metadataStore.updateCurrentPlaybackOverride(host.effectiveMetadataAlias(mediaId))
+                val effectiveAlias = host.effectiveMetadataAlias(mediaId)
+                metadataStore.updateCurrentPlaybackOverride(effectiveAlias)
+                val publishedMetadata = metadataWithEffectiveDisplayAlias(metadata, effectiveAlias)
+                MediaMetadataCache.put(publishedMetadata)
+                ProviderLogger.debug(
+                    "歌曲元数据已更新：source=$source, id=${publishedMetadata.id}, " +
+                        "queueId=${publishedMetadata.queueId}, 标题=${publishedMetadata.title}"
+                )
                 refreshPlaybackMetadata?.let { callback ->
                     currentRefresh = PlaybackMetadataRefresh(mediaId, callback)
                 }
-                PlaybackManager.onSongChanged(metadata.id)
+                PlaybackManager.onSongChanged(publishedMetadata.id)
                 host.logMetadataIdentity(
                     event = "queue_current_published",
                     details = "trigger=$source, previousId=$previousCurrentId, " +
-                        "publishedId=$mediaId, title=${metadata.title}, artist=${metadata.artist}, " +
-                        "queueId=${metadata.queueId}, overrideEnabled=$overrideAccountLanguage",
+                        "publishedId=$mediaId, title=${publishedMetadata.title}, " +
+                        "artist=${publishedMetadata.artist}, baseTitle=${metadata.title}, " +
+                        "baseArtist=${metadata.artist}, queueId=${metadata.queueId}, " +
+                        "overrideEnabled=$overrideAccountLanguage",
                 )
                 if (
                     previousMetadata != null &&
-                    (previousMetadata.title != metadata.title ||
-                        previousMetadata.artist != metadata.artist)
+                    (previousMetadata.title != publishedMetadata.title ||
+                        previousMetadata.artist != publishedMetadata.artist)
                 ) {
-                    PlaybackManager.onCatalogMetadataResolved(metadata.id)
+                    PlaybackManager.onCatalogMetadataResolved(publishedMetadata.id)
                 }
                 resolveCatalogMetadata(
                     metadata = metadata,
                     languageSelection = languageSelection,
                     overrideAccountLanguage = overrideAccountLanguage,
                     restoreCjkOriginalMetadata = restoreCjkOriginalMetadata,
+                )
+            } else {
+                MediaMetadataCache.put(metadata)
+                ProviderLogger.debug(
+                    "歌曲元数据已更新：source=$source, id=${metadata.id}, " +
+                        "queueId=${metadata.queueId}, 标题=${metadata.title}"
                 )
             }
         }.onFailure {

@@ -8,6 +8,7 @@ package io.github.proify.lyricon.amprovider.xposed
 
 import android.util.Log
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import com.juren233.hyperlyricsenhanced.root.utils.AppleMetadataFlowDiagnostics
 import com.juren233.hyperlyricsenhanced.common.lyric.LyricMetadataKeys
 import io.github.proify.lyricon.lyric.model.Song
 import io.github.proify.lyricon.provider.RemotePlayer
@@ -124,9 +125,19 @@ object PlaybackManager {
     }
 
     fun onCatalogMetadataResolved(id: String) {
+        if (BuildConfig.DEBUG && (id == currentSongId || id == lastSong?.id)) {
+            AppleMetadataFlowDiagnostics.record("catalog_republish_request") {
+                "id=$id currentId=$currentSongId accepted=${id == currentSongId} " +
+                    "previous=${AppleMetadataFlowDiagnostics.provider(lastSong)}"
+            }
+        }
         if (id != currentSongId) return
         val resolvedSong = SongRepository.getSong(id)
         val mergedSong = mergeCatalogMetadata(lastSong, resolvedSong)
+        if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("catalog_republish_merge") {
+            "resolved=${AppleMetadataFlowDiagnostics.provider(resolvedSong)} " +
+                "merged=${AppleMetadataFlowDiagnostics.provider(mergedSong)}"
+        }
         ProviderLogger.info(
             "PlaybackManager: Catalog metadata ready for current song $id, " +
                 "resolvedLines=${resolvedSong.lyrics?.size ?: 0}, " +
@@ -181,6 +192,12 @@ object PlaybackManager {
             playbackSongId = playbackSongId,
             source = source,
         )
+        if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("lyrics_publication_decision") {
+            "source=$source currentId=$currentSongId visibleId=$visibleSongId playbackId=$playbackSongId " +
+                "identityAccepted=$shouldPublish contentChanged=${if (shouldPublish) isSongSame else null} " +
+                "incoming=${AppleMetadataFlowDiagnostics.provider(song)} " +
+                "previous=${AppleMetadataFlowDiagnostics.provider(lastSong)}"
+        }
         if (shouldPublish && isSongSame) {
             if (id != currentSongId) {
                 currentSongId = id
@@ -227,11 +244,14 @@ object PlaybackManager {
             )
             setSong(publishedSong)
         } else {
-            ProviderLogger.debug("PlaybackManager: Lyrics ready for song $id, but not current song.")
+            ProviderLogger.debug(
+                if (shouldPublish) "PlaybackManager: Duplicate lyrics content for current song $id."
+                else "PlaybackManager: Lyrics ready for song $id, but not current song."
+            )
             logDisplayDiagnostic(
                 song,
                 "skipped",
-                "lyrics_for_non_current_song",
+                if (shouldPublish) "duplicate_lyrics_content_skipped" else "lyrics_for_non_current_song",
                 "source=$source, currentSongId=$currentSongId, " +
                     "visibleSongId=$visibleSongId, playbackSongId=$playbackSongId",
             )
@@ -516,6 +536,10 @@ object PlaybackManager {
                     "secondaryWordLines=${song?.lyrics?.count { !it.secondaryWords.isNullOrEmpty() } ?: 0}, " +
                     "displayTranslation=$displayTranslation, displayTranslationSuccess=$translationSent"
             )
+            AppleMetadataFlowDiagnostics.record("provider_publish") {
+                "sent=$sent contentUnchanged=$contentUnchanged currentId=$currentSongId " +
+                    "song=${AppleMetadataFlowDiagnostics.provider(song)}"
+            }
             logDisplayDiagnostic(
                 song = song,
                 result = if (sent) "published" else "skipped",
@@ -542,6 +566,7 @@ object PlaybackManager {
         val signature = listOf(
             song?.id,
             song?.name,
+            song?.artist,
             lyrics.size,
             lyrics.count { !it.translation.isNullOrBlank() },
             missingLyricsSupplement,

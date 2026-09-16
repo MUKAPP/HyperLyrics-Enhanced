@@ -8,6 +8,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import com.juren233.hyperlyricsenhanced.root.utils.AppleMetadataFlowDiagnostics
 import com.juren233.hyperlyricsenhanced.common.RootConstants
 import com.juren233.hyperlyricsenhanced.common.lyric.AppleOriginalMetadataPolicy
 import com.juren233.hyperlyricsenhanced.common.lyric.AppleMissingLyricsSourceInfo
@@ -35,6 +36,7 @@ import com.juren233.hyperlyricsenhanced.root.LyriconDataBridge
 import com.juren233.hyperlyricsenhanced.root.island.renderer.BaseIslandRenderer
 import com.juren233.hyperlyricsenhanced.root.utils.HookLogger
 import com.juren233.hyperlyricsenhanced.root.utils.MediaCardDiagnosticLogger
+import io.github.proify.lyricon.central.CentralRuntime
 import io.github.proify.lyricon.amprovider.xposed.AppleDirectBridgeContract
 import io.github.proify.lyricon.amprovider.xposed.AppleSourceSwitchPerformanceDiagnostics
 import io.github.proify.lyricon.lyric.model.Song as LyriconSong
@@ -349,6 +351,11 @@ class LyriconSource : LyricSource {
         origin: LyricPublicationOrigin = if (onlineTranslationMatched || isMissingLyricsSupplement(song))
             LyricPublicationOrigin.AUTOMATIC else LyricPublicationOrigin.NATIVE,
     ) {
+        if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("source_publish_request") {
+            "toSink=$publishToSink origin=$origin matched=$onlineTranslationMatched " +
+                "incoming=${AppleMetadataFlowDiagnostics.local(song)} " +
+                "current=${AppleMetadataFlowDiagnostics.local(currentAppleSong)}"
+        }
         if (!publishToSink) return
         if (BuildConfig.DEBUG) {
             HookLogger.i(
@@ -375,6 +382,10 @@ class LyriconSource : LyricSource {
         }
         val refreshed = publication.refreshAppleDisplayMetadata(incoming) { selected, matched ->
             dispatchAppleSong(selected, restorePosition = true, onlineTranslationMatched = matched)
+        }
+        if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("source_retained_refresh") {
+            "refreshed=$refreshed incoming=${AppleMetadataFlowDiagnostics.local(incoming)} " +
+                "published=${AppleMetadataFlowDiagnostics.local(currentPublishedAppleSong)}"
         }
         diagnostic(
             "stage=retained_metadata_refresh, incomingId=${incoming?.id}, " +
@@ -424,6 +435,11 @@ class LyriconSource : LyricSource {
             sink?.onOnlineTranslationMatched(song)
         } else {
             sink?.onSongChanged(song)
+        }
+        if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("bridge_publish_complete") {
+            "retained=$preservedSameSongState " +
+                "requested=${AppleMetadataFlowDiagnostics.local(song)} " +
+                "actual=${AppleMetadataFlowDiagnostics.local(LyriconDataBridge.currentSong)}"
         }
         BaseIslandRenderer.refreshActiveIsland()
         if (restorePosition && song != null && !song.lyrics.isNullOrEmpty()) {
@@ -692,6 +708,10 @@ internal val activePlayerListener = object : ActivePlayerListener {
 
     override fun onSongChanged(song: LyriconSong?) {
         val localSong = song?.toLocalSong()
+        if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("central_received") {
+            "player=$activeCentralPlayerPackageName provider=$activeProviderPackageName " +
+                "apple=$centralAppleProviderActive incoming=${AppleMetadataFlowDiagnostics.local(localSong)}"
+        }
         MediaCardDiagnosticLogger.log(
             stage = "central",
             event = "song_callback_begin",
@@ -705,6 +725,9 @@ internal val activePlayerListener = object : ActivePlayerListener {
                 "centralAppleProviderActive=$centralAppleProviderActive",
         )
         if (isCentralPlayerBlockedByMediaSession()) {
+            if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("central_dropped") {
+                "reason=no_active_media_session incoming=${AppleMetadataFlowDiagnostics.local(localSong)}"
+            }
             diagnostic(
                 "stage=central_song_dropped, reason=no_active_media_session, " +
                     "title=${localSong?.name}",
@@ -807,15 +830,31 @@ internal val activePlayerListener = object : ActivePlayerListener {
             )
             return
         }
-        if (isBuiltInAppleCentralProviderActive() &&
-            centralPlaybackPositionWitness.observeActivePosition(SystemClock.elapsedRealtime())
-        ) {
-            diagnostic(
-                "stage=central_playback_recovered_from_position_witness, " +
-                    "position=$position, player=$activeCentralPlayerPackageName, " +
-                    "provider=$activeProviderPackageName",
-            )
-            sink?.onPlaybackStateChanged(true)
+        if (isBuiltInAppleCentralProviderActive() && !fallbackSongActive) {
+            val currentSink = sink
+            if (currentSink != null) synchronized(currentSink) {
+                // Share RootLyricSink's state lock so a real pause cannot complete between
+                // the authority check and this recovery callback, then be overwritten by it.
+                val actualPlayback = currentSink.currentPlaybackState()
+                val upstreamPlayback = CentralRuntime.activePlayers.playbackStateFor(
+                    activeProviderPackageName,
+                    activeCentralPlayerPackageName,
+                )
+                if (centralPlaybackPositionWitness.observeActivePosition(
+                        observedAtMs = SystemClock.elapsedRealtime(),
+                        actualSinkPlaybackActive = actualPlayback,
+                        upstreamPlaybackActive = upstreamPlayback,
+                    )
+                ) {
+                    diagnostic(
+                        "stage=central_playback_recovered_from_position_witness, " +
+                            "position=$position, player=$activeCentralPlayerPackageName, " +
+                            "provider=$activeProviderPackageName, actualSinkPlaying=$actualPlayback, " +
+                            "upstreamPlaying=$upstreamPlayback",
+                    )
+                    currentSink.onPlaybackStateChanged(true)
+                }
+            }
         }
         if (centralAppleProviderActive && fallbackSongActive) {
             logCentralPositionDiagnostic(position, null, "dropped_apple_fallback_active")

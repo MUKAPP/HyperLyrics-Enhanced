@@ -356,6 +356,43 @@ class ActivePlayerCoordinatorTest {
         assertEquals(emptyList<String>(), listener.songIds)
     }
 
+
+    @Test
+    fun `playback state query is scoped to exact provider and player`() {
+        val coordinator = coordinator(officialProviderPreference = { null })
+        assertNull(coordinator.playbackStateFor(officialInfo.providerPackageName, playerPackageName))
+        val recorder = playingRecorder(officialInfo)
+        coordinator.onPlaybackStateChanged(recorder, true)
+        assertEquals(true, coordinator.playbackStateFor(officialInfo.providerPackageName, playerPackageName))
+        assertNull(coordinator.playbackStateFor(legacyInfo.providerPackageName, playerPackageName))
+        assertNull(coordinator.playbackStateFor(officialInfo.providerPackageName, otherPlayerPackageName))
+        assertNull(coordinator.playbackStateFor(null, playerPackageName))
+        assertNull(coordinator.playbackStateFor(officialInfo.providerPackageName, null))
+        recorder.isPlaying = false
+        coordinator.onPlaybackStateChanged(recorder, false)
+        assertEquals(false, coordinator.playbackStateFor(officialInfo.providerPackageName, playerPackageName))
+        coordinator.notifyProviderInvalid(officialInfo)
+        assertNull(coordinator.playbackStateFor(officialInfo.providerPackageName, playerPackageName))
+    }
+
+    @Test
+    fun `playback state query reports effective suppression instead of stale recorder true`() {
+        var conflict: Boolean? = false
+        val coordinator = coordinator(officialProviderPreference = { null }, audioConflict = { conflict })
+        val recorder = playingRecorder(officialInfo)
+        coordinator.onPlaybackStateChanged(recorder, true)
+        conflict = true
+        coordinator.onPositionChanged(recorder, 1_000L)
+        assertEquals(true, recorder.isPlaying)
+        assertEquals(false, coordinator.playbackStateFor(officialInfo.providerPackageName, playerPackageName))
+        conflict = null
+        coordinator.onPositionChanged(recorder, 1_050L)
+        assertEquals(false, coordinator.playbackStateFor(officialInfo.providerPackageName, playerPackageName))
+        conflict = false
+        coordinator.onPositionChanged(recorder, 1_100L)
+        assertEquals(true, coordinator.playbackStateFor(officialInfo.providerPackageName, playerPackageName))
+    }
+
     private fun playingRecorder(providerInfo: ProviderInfo) = PlayerRecorder(providerInfo).apply {
         isPlaying = true
     }

@@ -69,6 +69,15 @@ internal class ActivePlayerCoordinator(
         dispatchSnapshot(snapshot, listener)
     }
 
+    /** Effective state for this exact source, not a stale recorder or another player's state. */
+    fun playbackStateFor(providerPackageName: String?, playerPackageName: String?): Boolean? = lock.read {
+        val info = activeInfo ?: return@read null
+        if (providerPackageName == null || playerPackageName == null ||
+            info.providerPackageName != providerPackageName || info.playerPackageName != playerPackageName
+        ) return@read null
+        activeIsPlaying
+    }
+
     /** Replays the current active snapshot to every subscriber (gate recovery, resync). */
     fun syncAllListeners() {
         listeners.forEach { syncLatestState(it) }

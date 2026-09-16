@@ -1021,6 +1021,12 @@ internal class AppleOrchestratorInAppMetadataAssembly(
                         notifyModelChange = notifyModelChange,
                     )
                 },
+                publishCurrentPlaybackAliasFn = { mediaId, alias ->
+                    metadataOverrideApplicationCoordinator.publishCurrentPlaybackAlias(
+                        mediaId = mediaId,
+                        alias = alias,
+                    )
+                },
                 applyPlaybackMetadataOverrideFn = {
                     mediaId, alias, forceInAppRebind, rememberLocalizedArtist,
                     originalMetadata, originalMetadataConfirmed, artistOnly,

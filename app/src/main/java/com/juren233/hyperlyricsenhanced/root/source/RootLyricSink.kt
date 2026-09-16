@@ -36,6 +36,7 @@ class RootLyricSink(
     private var lastPositionDispatchTimeMs = 0L
     private var pendingPosition: Long? = null
     private var positionDispatchScheduled = false
+    @Volatile
     private var playbackActive = false
     private var lastReceivedPosition = Long.MIN_VALUE
     private var lastDispatchedPosition = Long.MIN_VALUE
@@ -154,6 +155,7 @@ class RootLyricSink(
         NotificationMediaAodLyricHooker.onLyricChanged()
     }
 
+    @Synchronized
     override fun onStop() {
         MediaCardDiagnosticLogger.log(
             stage = "root_sink",
@@ -189,6 +191,11 @@ class RootLyricSink(
         renderer.refreshActiveIsland()
     }
 
+    override fun currentPlaybackState(): Boolean = playbackActive
+
+    // Central Binder callbacks and direct/main-thread positions share this state. A position
+    // must not write an old paused value back to the bridge after a resume callback completes.
+    @Synchronized
     override fun onPlaybackStateChanged(isPlaying: Boolean) {
         MediaCardDiagnosticLogger.log(
             stage = "root_sink",
@@ -207,6 +214,7 @@ class RootLyricSink(
         )
     }
 
+    @Synchronized
     override fun onPositionChanged(position: Long) {
         if (position == lastReceivedPosition) {
             logPositionDiagnostic(position, "dropped_duplicate")
@@ -254,6 +262,7 @@ class RootLyricSink(
         )
     }
 
+    @Synchronized
     override fun onSeekTo(position: Long) {
         cancelPendingPositionDispatch()
         lastReceivedPosition = position

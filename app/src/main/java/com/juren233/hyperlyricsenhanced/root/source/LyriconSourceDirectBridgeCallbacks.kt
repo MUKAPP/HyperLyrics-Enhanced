@@ -8,6 +8,7 @@ package com.juren233.hyperlyricsenhanced.root.source
 
 import android.os.SystemClock
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import com.juren233.hyperlyricsenhanced.root.utils.AppleMetadataFlowDiagnostics
 import com.juren233.hyperlyricsenhanced.common.lyric.LyricMetadataKeys
 import com.juren233.hyperlyricsenhanced.lyric.model.Song as LocalSong
 import com.juren233.hyperlyricsenhanced.online.model.Source
@@ -31,6 +32,12 @@ internal fun LyriconSource.onDirectSongChanged(song: LyriconSong?) {
         appleMusicPackage = LyriconSource.APPLE_MUSIC_PACKAGE,
         builtInProviderPackage = LyriconSource.BUILT_IN_PROVIDER_PACKAGE,
     )
+    if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("direct_received") {
+        "accepted=$acceptDirect centralAvailable=$centralAppleSongAvailable " +
+            "player=$activeCentralPlayerPackageName provider=$activeProviderPackageName " +
+            "incoming=${AppleMetadataFlowDiagnostics.local(localSong)} " +
+            "current=${AppleMetadataFlowDiagnostics.local(currentAppleSong)}"
+    }
     if (!acceptDirect) {
         diagnostic(
             "stage=direct_song_callback_dropped, reason=central_song_authoritative, " +

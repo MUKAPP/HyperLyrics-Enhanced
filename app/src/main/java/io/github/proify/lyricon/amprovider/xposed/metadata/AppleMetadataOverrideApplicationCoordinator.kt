@@ -7,6 +7,7 @@
 package io.github.proify.lyricon.amprovider.xposed
 
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import com.juren233.hyperlyricsenhanced.root.utils.AppleMetadataFlowDiagnostics
 import io.github.proify.lyricon.amprovider.xposed.hooks.AppleFrameworkMetadataHooks
 import java.util.concurrent.atomic.AtomicLong
 
@@ -40,6 +41,21 @@ internal class AppleMetadataOverrideApplicationCoordinator(
             alias = alias,
             confirmed = confirmed,
         )
+    }
+
+    fun publishCurrentPlaybackAlias(mediaId: String, alias: Alias) {
+        if (playbackMetadataCoordinator.currentMetadataId() != mediaId) return
+        metadataStore.updateCurrentPlaybackOverride(alias)
+        val updated = MediaMetadataCache.updateDisplayMetadata(
+            mediaId = mediaId,
+            title = alias.title,
+            artist = alias.artist,
+        ) ?: return
+        if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("associated_artist_playback_publish") {
+            "id=$mediaId title=${AppleMetadataFlowDiagnostics.text(updated.title)} " +
+                "artist=${AppleMetadataFlowDiagnostics.text(updated.artist)}"
+        }
+        PlaybackManager.onCatalogMetadataResolved(mediaId)
     }
 
     fun apply(
@@ -128,6 +144,12 @@ internal class AppleMetadataOverrideApplicationCoordinator(
         }
         if (playbackMetadataCoordinator.currentMetadataId() == mediaId) {
             metadataStore.updateCurrentPlaybackOverride(effectiveAlias)
+        }
+        if (BuildConfig.DEBUG && appliesToActivePlayback) AppleMetadataFlowDiagnostics.record("catalog_display_override") {
+            "id=$mediaId active=${playbackMetadataCoordinator.currentMetadataId()} " +
+                "title=${AppleMetadataFlowDiagnostics.text(effectiveAlias.title)} " +
+                "artist=${AppleMetadataFlowDiagnostics.text(effectiveAlias.artist)} " +
+                "original=$originalMetadata"
         }
         MediaMetadataCache.updateDisplayMetadata(mediaId, effectiveAlias.title, effectiveAlias.artist)
         PlaybackManager.onCatalogMetadataResolved(mediaId)

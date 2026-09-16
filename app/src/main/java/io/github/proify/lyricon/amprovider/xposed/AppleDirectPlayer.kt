@@ -18,6 +18,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import com.juren233.hyperlyricsenhanced.root.utils.AppleMetadataFlowDiagnostics
 import com.juren233.hyperlyricsenhanced.IAppleMusicLyricBridge
 import com.juren233.hyperlyricsenhanced.IAppleMusicTranslationReceiver
 import io.github.proify.extensions.deflate
@@ -231,6 +232,9 @@ internal class AppleDirectPlayer(
             ProviderLogger.debug(
                 "直连重连后补发当前歌曲：bytes=${payload.size}, success=$replayed"
             )
+            if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("direct_replay") {
+                "bytes=${payload.size} success=$replayed"
+            }
         }
     }
 
@@ -304,7 +308,15 @@ internal class CompositeRemotePlayer(
     override val isActive: Boolean
         get() = central.isActive || direct.isActive
 
-    override fun setSong(song: Song?): Boolean = both { it.setSong(song) }
+    override fun setSong(song: Song?): Boolean {
+        val centralResult = runCatching { central.setSong(song) }.getOrDefault(false)
+        val directResult = runCatching { direct.setSong(song) }.getOrDefault(false)
+        if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("provider_fanout") {
+            "centralResult=$centralResult directResult=$directResult " +
+                "song=${AppleMetadataFlowDiagnostics.provider(song)}"
+        }
+        return centralResult || directResult
+    }
 
     override fun setPlaybackState(playing: Boolean): Boolean =
         both { it.setPlaybackState(playing) }
@@ -318,6 +330,9 @@ internal class CompositeRemotePlayer(
         val directResult = runCatching { direct.setPosition(position) }.getOrDefault(false)
         if (BuildConfig.DEBUG) {
             val now = SystemClock.elapsedRealtime()
+            AppleMetadataFlowDiagnostics.checkpoint("apple_playback") {
+                "centralActive=$centralActive directActive=$directActive"
+            }
             val state = "$centralActive|$centralResult|$directActive|$directResult"
             if (state != lastPositionDiagnosticState ||
                 now - lastPositionDiagnosticAtMs >= POSITION_DIAGNOSTIC_INTERVAL_MS

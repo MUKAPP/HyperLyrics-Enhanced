@@ -1051,6 +1051,28 @@ class AppleMetadataResolutionPolicyTest {
     }
 
     @Test
+    fun `associated artist hydration republishes only for current playback`() {
+        assertTrue(
+            shouldPublishAssociatedArtistAliasToCurrentPlayback(
+                mediaId = "905206656",
+                currentPlaybackMediaId = "905206656",
+            )
+        )
+        assertFalse(
+            shouldPublishAssociatedArtistAliasToCurrentPlayback(
+                mediaId = "905206656",
+                currentPlaybackMediaId = "1826029347",
+            )
+        )
+        assertFalse(
+            shouldPublishAssociatedArtistAliasToCurrentPlayback(
+                mediaId = "",
+                currentPlaybackMediaId = "",
+            )
+        )
+    }
+
+    @Test
     fun `stable or missing associated artist hydration does not republish`() {
         val alias = Alias(
             title = "Home",

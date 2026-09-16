@@ -9,6 +9,7 @@ package com.juren233.hyperlyricsenhanced.root.source
 import android.app.Application
 import android.os.SystemClock
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import com.juren233.hyperlyricsenhanced.root.utils.AppleMetadataFlowDiagnostics
 import com.juren233.hyperlyricsenhanced.common.media.MediaMetadataHelper
 import com.juren233.hyperlyricsenhanced.lyric.model.Song as LocalSong
 import com.juren233.hyperlyricsenhanced.root.utils.HookLogger
@@ -78,6 +79,13 @@ internal fun LyriconSource.observeAppleMediaSession(force: Boolean = false) {
     val media = MediaMetadataHelper.getMediaInfo(application, LyriconSource.APPLE_MUSIC_PACKAGE, HookLogger)
     if (media.title.isBlank()) return
     updateAppleMediaPositionReference(media)
+    if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.checkpoint("systemui_media_session") {
+        "mediaTitle=${AppleMetadataFlowDiagnostics.text(media.title)} " +
+            "mediaArtist=${AppleMetadataFlowDiagnostics.text(media.artist)} " +
+            "input=${AppleMetadataFlowDiagnostics.local(currentAppleSong)} " +
+            "published=${AppleMetadataFlowDiagnostics.local(currentPublishedAppleSong)} " +
+            "bridge=${AppleMetadataFlowDiagnostics.local(com.juren233.hyperlyricsenhanced.root.LyriconDataBridge.currentSong)}"
+    }
     if (!isOnlineTranslationEnabledFor(LyriconSource.APPLE_MUSIC_PACKAGE) &&
         !isFillMissingLyricsEnabled()
     ) {
@@ -256,9 +264,28 @@ internal fun LyriconSource.evaluateActiveMediaSessionGate() {
         }
         return
     }
-    if (!mediaSessionGateRecovery.shouldStop(player)) return
-    HookLogger.i(LyriconSource.TAG, "活动播放者已无系统 MediaSession，清除歌词显示: player=$player")
-    mainHandler.post { sink?.onStop() }
+    val stoppedSink = sink ?: return
+    val request = mediaSessionGateRecovery.requestStop(player) ?: return
+    mainHandler.post {
+        synchronized(stoppedSink) {
+            val shouldStop = stoppedSink === sink &&
+                mediaSessionGateRecovery.shouldApplyStop(
+                    request,
+                    currentPlayer = activeCentralPlayerPackageName,
+                    stillBlocked = activeMediaSessionGate.isBlocked(player),
+                )
+            if (!shouldStop) {
+                if (BuildConfig.DEBUG) diagnostic(
+                    "stage=media_session_stop_discarded, player=$player, " +
+                        "currentPlayer=$activeCentralPlayerPackageName, generation=${request.generation}",
+                )
+                return@post
+            }
+            HookLogger.i(LyriconSource.TAG, "活动播放者已无系统 MediaSession，清除歌词显示: player=$player")
+            centralPlaybackPositionWitness.onSinkStopped()
+            stoppedSink.onStop()
+        }
+    }
 }
 
 internal fun LyriconSource.isCentralPlayerBlockedByMediaSession(): Boolean {

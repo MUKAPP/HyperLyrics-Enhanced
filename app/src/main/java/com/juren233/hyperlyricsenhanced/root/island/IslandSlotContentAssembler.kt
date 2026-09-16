@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.view.View
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import com.juren233.hyperlyricsenhanced.root.utils.AppleMetadataFlowDiagnostics
 import com.juren233.hyperlyricsenhanced.common.RootConstants
 import com.juren233.hyperlyricsenhanced.common.IslandLyricPosition
 import com.juren233.hyperlyricsenhanced.common.lyric.CjkLyricWhitespacePolicy
@@ -697,6 +698,13 @@ internal object IslandSlotContentAssembler {
             mediaArtist = mediaInfo.artist
         )
         val albumName = mediaInfo.album
+        if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("island_choice", changedOnly = true) {
+            "id=${AppleMetadataFlowDiagnostics.text(LyriconDataBridge.currentSong?.id)} " +
+                "providerArtist=${AppleMetadataFlowDiagnostics.text(LyriconDataBridge.currentSong?.artist)} " +
+                "mediaArtist=${AppleMetadataFlowDiagnostics.text(mediaInfo.artist)} " +
+                "selectedArtist=${AppleMetadataFlowDiagnostics.text(artistName)} " +
+                "selectedTitle=${AppleMetadataFlowDiagnostics.text(songName)}"
+        }
 
         val signature = listOf(
             "metadata",

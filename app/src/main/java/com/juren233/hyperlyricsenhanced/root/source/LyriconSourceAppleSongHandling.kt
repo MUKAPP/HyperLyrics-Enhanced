@@ -16,6 +16,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import com.juren233.hyperlyricsenhanced.root.utils.AppleMetadataFlowDiagnostics
 import com.juren233.hyperlyricsenhanced.common.RootConstants
 import com.juren233.hyperlyricsenhanced.common.lyric.AppleOriginalMetadataPolicy
 import com.juren233.hyperlyricsenhanced.common.lyric.AppleMissingLyricsSourceInfo
@@ -93,6 +94,12 @@ internal fun LyriconSource.handleAppleSong(incomingSong: LocalSong?) {
         previousSong = previousSong,
         incomingSong = incomingSong,
     )
+    if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("source_merge") {
+        "sameTrack=$sameTrack authoritative=$authoritativeLyricsSource " +
+            "incoming=${AppleMetadataFlowDiagnostics.local(incomingSong)} " +
+            "previous=${AppleMetadataFlowDiagnostics.local(previousSong)} " +
+            "merged=${AppleMetadataFlowDiagnostics.local(song)}"
+    }
     val authoritativeNativeTransition = sameTrack &&
         isMissingLyricsSupplement(previousSong) &&
         hasConfirmedAppleNativeLyrics(song)

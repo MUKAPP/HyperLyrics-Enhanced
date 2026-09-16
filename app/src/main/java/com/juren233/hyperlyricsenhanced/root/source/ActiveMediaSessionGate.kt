@@ -167,21 +167,32 @@ class ActiveMediaSessionGate(
 internal class MediaSessionGateRecoveryTracker {
 
     private var stoppedPlayer: String? = null
+    private var stopGeneration = 0L
 
-    /** 该播放者尚未发过清除时返回 true（并登记），同一播放者不重复清除。 */
-    fun shouldStop(player: String): Boolean {
-        if (stoppedPlayer == player) return false
+    internal data class StopRequest(val player: String, val generation: Long)
+
+    /** A generation-bound request prevents an old queued stop from retiring a recovered source. */
+    @Synchronized
+    fun requestStop(player: String): StopRequest? {
+        if (stoppedPlayer == player) return null
         stoppedPlayer = player
-        return true
+        return StopRequest(player, ++stopGeneration)
     }
+
+    @Synchronized
+    fun shouldApplyStop(request: StopRequest, currentPlayer: String?, stillBlocked: Boolean): Boolean =
+        request.generation == stopGeneration && request.player == stoppedPlayer &&
+            request.player == currentPlayer && stillBlocked
 
     /**
      * 门控解除时调用：存在清除记录则清除之，且仅当解除的播放者与被清除的一致时
      * 返回 true（需要重放快照）。
      */
+    @Synchronized
     fun shouldReplayAfterRecovery(player: String): Boolean {
         val stopped = stoppedPlayer ?: return false
         stoppedPlayer = null
+        stopGeneration++
         return stopped == player
     }
 }
