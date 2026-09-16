@@ -55,6 +55,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -91,6 +93,7 @@ import com.juren233.hyperlyricsenhanced.ui.page.main.AboutPage
 import com.juren233.hyperlyricsenhanced.ui.page.main.AboutHeroView
 import com.juren233.hyperlyricsenhanced.ui.page.main.AboutHeroVisualState
 import com.juren233.hyperlyricsenhanced.ui.page.main.AboutDebugLog
+import com.juren233.hyperlyricsenhanced.ui.page.main.AboutDeviceInfoHelper
 import com.juren233.hyperlyricsenhanced.ui.page.main.HomePage
 import com.juren233.hyperlyricsenhanced.ui.page.hooksettings.AppleMusicOptimizationPage
 import com.juren233.hyperlyricsenhanced.ui.page.main.OneTapRefreshCatalog
@@ -135,8 +138,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.window.WindowDialog
 import androidx.core.net.toUri
-import java.io.BufferedReader
-import java.io.InputStreamReader
 
 @Composable
 fun MainPage() {
@@ -453,17 +454,17 @@ fun MainPage() {
             null
         }
     }
-    val aboutDeviceModel = remember { getSystemProperty("ro.product.marketname") ?: Build.MODEL }
-    val aboutDeviceName = remember(aboutDeviceModel) {
-        listOfNotNull(
-            runCatching {
-                Settings.Global.getString(context.contentResolver, "device_name")
-            }.getOrNull(),
-            getSystemProperty("persist.private.device_name"),
-            getSystemProperty("persist.sys.device_name"),
-        ).firstOrNull { it.isNotBlank() } ?: aboutDeviceModel
+    val aboutDeviceModel = remember { AboutDeviceInfoHelper.resolveDeviceModel() }
+    var aboutDeviceName by remember { mutableStateOf(AboutDeviceInfoHelper.resolveDeviceName(context)) }
+    LaunchedEffect(Unit) {
+        val rootName = withContext(Dispatchers.IO) {
+            AboutDeviceInfoHelper.resolveDeviceNameWithRoot(context)
+        }
+        if (!rootName.isNullOrBlank()) {
+            aboutDeviceName = rootName
+        }
     }
-    val aboutOsVersion = remember { getSystemProperty("ro.build.version.incremental") ?: Build.DISPLAY }
+    val aboutOsVersion = remember { AboutDeviceInfoHelper.getSystemProperty("ro.build.version.incremental") ?: Build.DISPLAY }
     val aboutAndroidVersion = Build.VERSION.RELEASE
 
     // --- nav items ---
@@ -920,16 +921,8 @@ private fun RailNavItem(
     }
 }
 
-/** 读取只读系统属性，获取失败时交由上层选择回退值。 */
+/** 读取系统属性，优先反射 android.os.SystemProperties，失败时回退到 getprop 进程。 */
 private fun getSystemProperty(key: String): String? {
-    return try {
-        val process = Runtime.getRuntime().exec("getprop $key")
-        BufferedReader(InputStreamReader(process.inputStream)).use {
-            val line = it.readLine()
-            if (line.isNullOrEmpty()) null else line
-        }
-    } catch (_: Exception) {
-        null
-    }
+    return AboutDeviceInfoHelper.getSystemProperty(key)
 }
 
