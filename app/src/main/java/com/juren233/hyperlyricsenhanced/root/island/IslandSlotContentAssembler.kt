@@ -612,7 +612,14 @@ internal object IslandSlotContentAssembler {
             // View still draws the previous line until the animation callback. A position or
             // width refresh in that window must not put the target line's alignment on the
             // old text. The callback below applies alignment and content together at alpha 0.
-            if (!contentChanged) {
+            // 预览提升窗口例外：rawLine 在动画开始时即已写入，contentChanged 恒为
+            // false，但旧句仍在淡出——对齐已暂存，落地前不得在此提前套用。
+            val promotionRunning = when (view) {
+                is RichLyricLineView -> view.isNextLinePromotionRunning
+                is SpaceGateRichLyricLineView -> view.isNextLinePromotionRunning
+                else -> false
+            }
+            if (!contentChanged && !promotionRunning) {
                 applyLineCentering(view, centerCurrentLine, centerSecondaryLine)
                 applyLineRightAlignment(
                     view,
@@ -624,13 +631,43 @@ internal object IslandSlotContentAssembler {
             return false
         }
 
+        val willAnimateNextLinePromotion = when (view) {
+            is RichLyricLineView -> view.willAnimateNextLinePromotion(targetLine)
+            is SpaceGateRichLyricLineView -> view.willAnimateNextLinePromotion(targetLine)
+            else -> false
+        }
+        // 预览提升窗口：line 写入即启动动画，旧句要完整淡出，行级对齐不能像
+        // 普通换句那样等到落地回调才与内容同点套用——写入本身就是同步的，
+        // 提前套用会让合唱居中旧句先按下一句方向重渲染再换字。暂存到提升
+        // 落地（finishNextLinePromotion）再生效，与 160164 淡出窗口契约同源。
+        val deferAlignmentToPromotionLanding = willAnimateNextLinePromotion &&
+            !lyricsJustBecameAvailable &&
+            view.parent != null &&
+            view.isAttachedToWindow
         val applyLine: (View) -> Unit = { target ->
-            applyLineCentering(target, centerCurrentLine, centerSecondaryLine)
-            applyLineRightAlignment(
-                target,
-                alignMainRight = config.rightAlignLyric(alignmentIsLeft) && !centerCurrentLine,
-                alignSecondaryRight = config.rightAlignLyric(alignmentIsLeft) && !centerSecondaryLine
-            )
+            if (deferAlignmentToPromotionLanding) {
+                when (target) {
+                    is RichLyricLineView -> target.stagePromotionLandingAlignment(
+                        centerMain = centerCurrentLine,
+                        centerSecondary = centerSecondaryLine,
+                        alignMainRight = config.rightAlignLyric(alignmentIsLeft) && !centerCurrentLine,
+                        alignSecondaryRight = config.rightAlignLyric(alignmentIsLeft) && !centerSecondaryLine
+                    )
+                    is SpaceGateRichLyricLineView -> target.stagePromotionLandingAlignment(
+                        centerMain = centerCurrentLine,
+                        centerSecondary = centerSecondaryLine,
+                        alignMainRight = config.rightAlignLyric(alignmentIsLeft) && !centerCurrentLine,
+                        alignSecondaryRight = config.rightAlignLyric(alignmentIsLeft) && !centerSecondaryLine
+                    )
+                }
+            } else {
+                applyLineCentering(target, centerCurrentLine, centerSecondaryLine)
+                applyLineRightAlignment(
+                    target,
+                    alignMainRight = config.rightAlignLyric(alignmentIsLeft) && !centerCurrentLine,
+                    alignSecondaryRight = config.rightAlignLyric(alignmentIsLeft) && !centerSecondaryLine
+                )
+            }
             when (target) {
                 is RichLyricLineView -> {
                     target.line = targetLine
@@ -644,12 +681,13 @@ internal object IslandSlotContentAssembler {
                 }
             }
             IslandLyricTextInjector.syncDuetGravityAfterContentLanding(target, config)
-        }
-
-        val willAnimateNextLinePromotion = when (view) {
-            is RichLyricLineView -> view.willAnimateNextLinePromotion(targetLine)
-            is SpaceGateRichLyricLineView -> view.willAnimateNextLinePromotion(targetLine)
-            else -> false
+            if (deferAlignmentToPromotionLanding) {
+                // 视图侧未真正起跑提升（如首帧高度为 0）时当场消费暂存，避免标志滞留。
+                when (target) {
+                    is RichLyricLineView -> target.settlePromotionLandingAlignment()
+                    is SpaceGateRichLyricLineView -> target.settlePromotionLandingAlignment()
+                }
+            }
         }
         val suppressContentAnimation = suppressAnimation ||
             (willAnimateNextLinePromotion && !lyricsJustBecameAvailable) ||
@@ -659,10 +697,7 @@ internal object IslandSlotContentAssembler {
         // 先让视图按目标行落定后的实测宽度参与岛宽测量，使岛宽与上浮动画同步
         // 过渡；内容落地时 pendingHugWidth 清除并由 onDeferredContentApplied 实测兜底。
         if (config.dynamicWidthEnabled) {
-            val deferredByPromotion = willAnimateNextLinePromotion &&
-                !lyricsJustBecameAvailable &&
-                view.parent != null &&
-                view.isAttachedToWindow
+            val deferredByPromotion = deferAlignmentToPromotionLanding
             when (view) {
                 is RichLyricLineView -> view.beginDeferredContentWidth(targetLine.takeIf { deferredByPromotion })
                 is SpaceGateRichLyricLineView -> view.beginDeferredContentWidth(targetLine.takeIf { deferredByPromotion })

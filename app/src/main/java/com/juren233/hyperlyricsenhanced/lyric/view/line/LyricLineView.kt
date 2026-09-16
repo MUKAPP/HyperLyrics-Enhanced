@@ -206,8 +206,17 @@ open class LyricLineView(context: Context, attrs: AttributeSet? = null) :
 
     fun currentTextStartX(): Float = resolveTextStartX(lineWidth, _model.isAlignedRight)
 
-    fun textStartX(text: String?, isAlignedRight: Boolean): Float =
-        resolveTextStartX(textPaint.measureText(text.orEmpty()), isAlignedRight)
+    fun textStartX(
+        text: String?,
+        isAlignedRight: Boolean,
+        centerIfPossibleOverride: Boolean? = null,
+        alignRightOverride: Boolean? = null
+    ): Float = resolveTextStartX(
+        textPaint.measureText(text.orEmpty()),
+        isAlignedRight,
+        centerIfPossibleOverride,
+        alignRightOverride
+    )
 
     fun setTextSize(size: Float) {
         val needsUpdate = textPaint.textSize != size || syncRenderer.bgPaint.textSize != size
@@ -749,15 +758,22 @@ open class LyricLineView(context: Context, attrs: AttributeSet? = null) :
         }
     }
 
-    private fun resolveTextStartX(textWidth: Float, isAlignedRight: Boolean): Float {
+    private fun resolveTextStartX(
+        textWidth: Float,
+        isAlignedRight: Boolean,
+        centerIfPossibleOverride: Boolean? = null,
+        alignRightOverride: Boolean? = null
+    ): Float {
         // 布局宽度优先：原生岛以展开几何做瞬态测量时 measuredWidth 会被抬到
         // hug 下限（如对唱全曲最长行），据此算出的换边/居中偏移会把文本推出
         // 实际岛宽造成裁切；scrollWidth 才是用户可见宽度，语义同 scrollWidth 属性。
         val availableWidth = scrollWidth.toFloat()
+        val centerFlag = centerIfPossibleOverride ?: centerIfPossible
+        val rightFlag = alignRightOverride ?: alignRight
         return when {
             textWidth >= availableWidth -> 0f
-            alignRight -> availableWidth - textWidth
-            centerIfPossible -> (availableWidth - textWidth) / 2f
+            rightFlag -> availableWidth - textWidth
+            centerFlag -> (availableWidth - textWidth) / 2f
             isAlignedRight -> availableWidth - textWidth
             else -> 0f
         }

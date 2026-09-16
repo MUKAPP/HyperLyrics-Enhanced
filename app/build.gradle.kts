@@ -40,7 +40,7 @@ android {
         applicationId = "com.juren233.hyperlyricsenhanced"
         minSdk = 33
         targetSdk = 37
-        versionCode = 160229
+        versionCode = 160230
         versionName = ciVersionName ?: "7.6.0-canary"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

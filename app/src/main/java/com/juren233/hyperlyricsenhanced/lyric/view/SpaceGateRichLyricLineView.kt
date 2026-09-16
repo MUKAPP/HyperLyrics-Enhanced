@@ -194,6 +194,11 @@ class SpaceGateRichLyricLineView(
     private var nextLineTransitionGeneration = 0
     private var centerMainLine: Boolean? = null
     private var centerSecondaryLine: Boolean? = null
+    // 预览提升窗口的对齐暂存：提升动画期间旧句仍在上屏，视图级居中/靠右
+    // 标志必须等提升落地（finishNextLinePromotion）再套用，否则旧句会先按
+    // 下一句的方向重渲染（合唱居中句先变靠左再换字）。
+    private var stagedPromotionCentering: Pair<Boolean, Boolean>? = null
+    private var stagedPromotionRightAlign: Pair<Boolean, Boolean>? = null
 
     internal fun willAnimateNextLinePromotion(
         targetLine: IRichLyricLine?,
@@ -431,6 +436,43 @@ class SpaceGateRichLyricLineView(
         centerSecondaryLine?.let { secondary.centerIfPossible = it }
     }
 
+    internal fun stagePromotionLandingAlignment(
+        centerMain: Boolean,
+        centerSecondary: Boolean,
+        alignMainRight: Boolean,
+        alignSecondaryRight: Boolean
+    ) {
+        stagedPromotionCentering = centerMain to centerSecondary
+        stagedPromotionRightAlign = alignMainRight to alignSecondaryRight
+        if (BuildConfig.DEBUG) {
+            HookLogger.d(
+                "SwitchTrace",
+                "stage promotion alignment view=${System.identityHashCode(this).toString(16)} " +
+                    "centerMain=$centerMain alignMainRight=$alignMainRight"
+            )
+        }
+    }
+
+    internal val isNextLinePromotionRunning: Boolean
+        get() = nextLineTransitionRunning
+
+    /** 提升未实际起跑时立即消费暂存对齐；运行中则交给落地回调。 */
+    internal fun settlePromotionLandingAlignment() {
+        if (nextLineTransitionRunning) return
+        applyStagedPromotionAlignment()
+    }
+
+    private fun applyStagedPromotionAlignment() {
+        stagedPromotionCentering?.let { (mainCenter, secondaryCenter) ->
+            setLineCentering(mainCenter, secondaryCenter)
+        }
+        stagedPromotionRightAlign?.let { (mainRight, secondaryRight) ->
+            setLineAlignmentRight(mainRight, secondaryRight)
+        }
+        stagedPromotionCentering = null
+        stagedPromotionRightAlign = null
+    }
+
     override fun updateColor(primary: IntArray, background: IntArray, highlight: IntArray) {
         forEach { if (it is UpdatableColor) it.updateColor(primary, background, highlight) }
     }
@@ -636,6 +678,8 @@ class SpaceGateRichLyricLineView(
         nextLineTransitionRunning = false
         pendingHugWidth = null
         refreshLines(allowNextLinePromotion = false, bypassIdentityCheck = true)
+        // 新内容已渲染，此刻套用暂存对齐——与内容同帧生效，旧句淡出期间不受影响。
+        applyStagedPromotionAlignment()
         onDeferredContentApplied?.invoke()
         if (alwaysShowSecondary) {
             secondary.alpha = 0f
@@ -655,6 +699,8 @@ class SpaceGateRichLyricLineView(
         main.animate().cancel()
         secondary.animate().cancel()
         nextLineTransitionRunning = false
+        stagedPromotionCentering = null
+        stagedPromotionRightAlign = null
         clearNextLineTransitionState()
     }
 
