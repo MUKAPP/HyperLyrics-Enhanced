@@ -16,7 +16,7 @@ import org.junit.Test
 class AppleHookRegistrarTest {
 
     @Test
-    fun `callback tracer reports only the first callback for each module`() {
+    fun `callback tracer deduplicates each module and executable pair`() {
         val firstCallbacks = mutableListOf<String>()
         val scopes = mutableListOf<String>()
         var delegateCalls = 0
@@ -59,6 +59,25 @@ class AppleHookRegistrarTest {
             ),
             scopes,
         )
+    }
+
+    @Test
+    fun `callbacks in the same module are tracked separately for each executable`() {
+        val hits = mutableListOf<String>()
+        val tracer = AppleHookCallbackTracer(
+            withModule = { _, block -> block() },
+            onFirstCallback = { _, executable -> hits += executable.name },
+        )
+        val delegate = object : Hooker {
+            override fun intercept(chain: Chain): Any? = chain.proceed()
+        }
+        val first = tracer.wrap("queue", TEST_EXECUTABLE, delegate)
+        val second = tracer.wrap("queue", Any::class.java.getDeclaredMethod("hashCode"), delegate)
+        first.intercept(chain())
+        second.intercept(chain())
+        first.intercept(chain())
+        second.intercept(chain())
+        assertEquals(listOf("toString", "hashCode"), hits)
     }
 
     private fun chain(): Chain = Proxy.newProxyInstance(

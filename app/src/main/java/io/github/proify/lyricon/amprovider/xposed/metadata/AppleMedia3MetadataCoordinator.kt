@@ -21,21 +21,18 @@ internal class AppleMedia3MetadataCoordinator(
     private val playbackMetadataCoordinator: ApplePlaybackMetadataCoordinator,
     private val traceSequence: AtomicLong,
 ) {
-    private val metadataTarget = runtime.hookResolver.resolveMethod(
-        AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_SUBMIT,
-    ).target
+    // 可空降级：6.5.3 队列适配器 submit 目标无法解析时由 now-playing 目标兜底携带
+    // MEDIA3 成员名；两者都失败时元数据字段读取降级为 null，不再中断初始化。
+    private val metadataTarget: AppleMusicHookTarget? =
+        runtime.hookResolver.resolveMedia3MetadataTarget()
 
     fun mediaId(
         metadata: Any,
         fallback: String?,
         trustedFallback: Boolean = false,
     ): String? {
-        val bundleId = runCatching {
-            (AppleReflection.field(
-                metadata,
-                member(AppleMusicRuntimeMember.MEDIA3_METADATA_BUNDLE_FIELD),
-            ) as? Bundle)?.getString(MEDIA3_METADATA_ID_KEY)
-        }.getOrNull()
+        val bundleId = fieldValue(metadata, AppleMusicRuntimeMember.MEDIA3_METADATA_BUNDLE_FIELD)
+            ?.let { it as? Bundle }?.getString(MEDIA3_METADATA_ID_KEY)
         bundleId?.takeIf { it.isNotBlank() && it.all(Char::isDigit) }?.let { return it }
         accountMatches(metadata).singleOrNull()?.let { return it }
         return fallback
@@ -44,24 +41,12 @@ internal class AppleMedia3MetadataCoordinator(
     }
 
     fun details(metadata: Any): String {
-        val bundleId = runCatching {
-            (AppleReflection.field(
-                metadata,
-                member(AppleMusicRuntimeMember.MEDIA3_METADATA_BUNDLE_FIELD),
-            ) as? Bundle)?.getString(MEDIA3_METADATA_ID_KEY)
-        }.getOrNull()
-        val title = runCatching {
-            AppleReflection.field(
-                metadata,
-                member(AppleMusicRuntimeMember.MEDIA3_METADATA_TITLE_FIELD),
-            )
-        }.getOrNull()
-        val artist = runCatching {
-            AppleReflection.field(
-                metadata,
-                member(AppleMusicRuntimeMember.MEDIA3_METADATA_ARTIST_FIELD),
-            )
-        }.getOrNull()
+        val bundleId = fieldValue(metadata, AppleMusicRuntimeMember.MEDIA3_METADATA_BUNDLE_FIELD)
+            ?.let { it as? Bundle }?.getString(MEDIA3_METADATA_ID_KEY)
+        val title = fieldValue(metadata, AppleMusicRuntimeMember.MEDIA3_METADATA_TITLE_FIELD)
+            ?.toString()
+        val artist = fieldValue(metadata, AppleMusicRuntimeMember.MEDIA3_METADATA_ARTIST_FIELD)
+            ?.toString()
         val matches = accountMatches(metadata)
         return "bundleId=$bundleId, title=$title, artist=$artist, " +
             "accountMatches=$matches, matchCount=${matches.size}"
@@ -143,12 +128,15 @@ internal class AppleMedia3MetadataCoordinator(
     }
 
     private fun textField(metadata: Any, runtimeMember: AppleMusicRuntimeMember): String? =
-        runCatching {
-            AppleReflection.field(metadata, member(runtimeMember)) as? CharSequence
-        }.getOrNull()?.toString()?.takeIf(String::isNotBlank)
+        fieldValue(metadata, runtimeMember)
+            ?.let { it as? CharSequence }?.toString()
+            ?.takeIf(String::isNotBlank)
 
-    private fun member(runtimeMember: AppleMusicRuntimeMember): String =
-        metadataTarget.runtimeMemberName(runtimeMember)
+    /** 成员名载体缺失或反射读取失败时返回 null，不向调用方抛出。 */
+    private fun fieldValue(metadata: Any, runtimeMember: AppleMusicRuntimeMember): Any? =
+        metadataTarget?.runtimeMemberNameOrNull(runtimeMember)?.let { name ->
+            runCatching { AppleReflection.field(metadata, name) }.getOrNull()
+        }
 
     private companion object {
         const val MEDIA3_METADATA_ID_KEY = Constants.APPLE_MEDIA3_METADATA_ID_KEY

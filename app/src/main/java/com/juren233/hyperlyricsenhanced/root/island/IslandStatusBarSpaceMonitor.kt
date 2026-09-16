@@ -60,7 +60,7 @@ internal object IslandStatusBarSpaceMonitor {
 
         fun observation(view: ViewGroup): List<IslandDynamicLimitPolicy.Span> =
             IslandDynamicLimitPolicy.relevantObservation(
-                obstacles = collect(view),
+                obstacles = collect(view, pad),
                 screenWidth = view.width,
                 leftAnchor = if (pad) 0 else null,
             )
@@ -148,14 +148,15 @@ internal object IslandStatusBarSpaceMonitor {
      * 图标随之时移（真机：左缘 66↔79、右缘 257↔280 随岛宽摆动）。因此锚点本体
      * 使用冻结快照，且重锚条件只看条目数量（通知图标增删）——任何坐标比较都会被
      * 岛诱导的位移击穿，让上限追逐自己的影子（160151 教训：坐标比较使快照反复
-     * 重建，宽度在 604↔650 间持续漂移）。平板锚点独立于岛宽，保持实时。
+     * 重建，宽度在 604↔650 间持续漂移）。平板同样存在随岛几何布局的视图（岛内
+     * 部布局在岛右缘外的过渡占位），靠 collect() 的岛视图过滤排除，快照保持实时。
      */
     fun obstacles(content: View, screenWidth: Int): List<IslandDynamicLimitPolicy.Span>? {
         val phone = !isPadView(content)
         val live = roots.keys.firstOrNull {
             it.isAttachedToWindow && it.isShown && it.display?.displayId == content.display?.displayId &&
                 it.width == screenWidth
-        }?.let { root -> collect(root).takeIf { it.isNotEmpty() } }
+        }?.let { root -> collect(root, isPadView(root)).takeIf { it.isNotEmpty() } }
         val stable = snapshot.fallbackFor(screenWidth)
         if (live != null) {
             val structuralChange = if (phone) {
@@ -173,8 +174,9 @@ internal object IslandStatusBarSpaceMonitor {
         return stable
     }
 
-    private fun collect(root: ViewGroup): List<IslandDynamicLimitPolicy.Span> {
+    private fun collect(root: ViewGroup, pad: Boolean): List<IslandDynamicLimitPolicy.Span> {
         val spans = ArrayList<IslandDynamicLimitPolicy.Span>()
+        val identities = ArrayList<String>()
         val position = IntArray(2)
         val rootPosition = IntArray(2)
         root.getLocationOnScreen(rootPosition)
@@ -182,6 +184,25 @@ internal object IslandStatusBarSpaceMonitor {
             // Reserve laid-out INVISIBLE / alpha-zero icons too: island-induced hiding must
             // not free space and create a grow/hide/shrink feedback loop. GONE has no layout.
             if (view.visibility == View.GONE || view.width <= 0 || view.height <= 0) return
+            // 岛自身视图不是障碍：岛内部有些视图布局在岛右缘之外一点的位置并随岛宽移动，
+            // 收进障碍集会让上限恒等于岛当前宽度，形成逐秒棘轮收缩
+            // （2026-09-15 平板日志：障碍左缘恒=岛右缘+15px，宽度 310→274px 连续收缩）。
+            if (view !== root &&
+                view.javaClass.name.startsWith(IslandDynamicLimitProfile.ISLAND_VIEW_PACKAGE_PREFIX)
+            ) {
+                return
+            }
+            // 通知图标槽位（StatusBarIconView）被宿主排在岛几何之后随岛宽重排，
+            // 属于随岛移动的影子内容，不是可避让的静态障碍（运行时身份日志实证）。
+            if (view !== root &&
+                view.javaClass.name == IslandDynamicLimitProfile.NOTIFICATION_ICON_CONTAINER_CLASS
+            ) {
+                return
+            }
+            // 平板额外跳过不可见/全透明视图：平板存在随岛几何布局的隐藏占位，收进障碍集
+            // 同样形成影子追逐；手机端保留 INVISIBLE 预约（手机上限只以时间文本为锚，
+            // 不可见图标不参与上限）。
+            if (pad && view !== root && (view.visibility != View.VISIBLE || view.alpha == 0f)) return
             val draws = when (view) {
                 is TextView -> view.text.isNotEmpty()
                 is ImageView -> view.drawable != null
@@ -191,12 +212,34 @@ internal object IslandStatusBarSpaceMonitor {
                 view.getLocationOnScreen(position)
                 if (position[1] < rootPosition[1] + root.height && position[1] + view.height > rootPosition[1]) {
                     spans += IslandDynamicLimitPolicy.Span(position[0], position[0] + view.width, text = view is TextView)
+                    if (BuildConfig.DEBUG && pad) identities.add(describe(view, position[0]))
                 }
                 return
             }
             if (view is ViewGroup) for (i in 0 until view.childCount) visit(view.getChildAt(i))
         }
         visit(root)
+        if (identities.isNotEmpty()) logIdentitiesOncePerSignature(identities)
         return spans.distinct().sortedBy { it.left }
+    }
+
+    /** 影子障碍身份判别（仅 Debug）：签名（不含坐标）变化时打印一次完整身份。 */
+    @Volatile
+    private var lastIdentitySignature: String? = null
+
+    private fun describe(view: View, left: Int): String {
+        val idName = runCatching {
+            if (view.id == View.NO_ID) "no-id" else view.resources.getResourceEntryName(view.id)
+        }.getOrDefault("id?")
+        val parent = runCatching { view.parent?.javaClass?.name }.getOrNull()
+        return "${view.javaClass.name} id=$idName vis=${view.visibility} alpha=${view.alpha} " +
+            "w=${view.width}x${view.height} left=$left parent=$parent"
+    }
+
+    private fun logIdentitiesOncePerSignature(identities: List<String>) {
+        val signature = identities.joinToString("\n").replace(Regex(" left=-?\\d+"), "")
+        if (signature == lastIdentitySignature) return
+        lastIdentitySignature = signature
+        HookLogger.i(TAG, "状态栏障碍视图身份:\n" + identities.joinToString("\n"))
     }
 }

@@ -100,6 +100,11 @@ internal class AppleHookRegistrar(
                     },
                 )
                 AppleMusicDexKitWatchdog.hookInstalled(current)
+                if (BuildConfig.DEBUG) {
+                    ProviderLogger.diagnostic(
+                        "Apple Music Hook 已安装: module=$moduleId, target=$current"
+                    )
+                }
                 return
             } catch (failure: Throwable) {
                 val replacement = if (!retried) {
@@ -123,7 +128,7 @@ internal class AppleHookCallbackTracer(
     private val withModule: (String, () -> Any?) -> Any?,
     private val onFirstCallback: (String, Executable) -> Unit,
 ) {
-    private val firstCallbackModuleIds = ConcurrentHashMap.newKeySet<String>()
+    private val firstCallbackTargets = ConcurrentHashMap.newKeySet<Pair<String, Executable>>()
 
     fun wrap(
         moduleId: String,
@@ -132,7 +137,7 @@ internal class AppleHookCallbackTracer(
     ): Hooker = object : Hooker {
         override fun intercept(chain: Chain): Any? = withModule(moduleId) {
             AppleMusicDexKitWatchdog.callback(executable)
-            if (firstCallbackModuleIds.add(moduleId)) {
+            if (firstCallbackTargets.add(moduleId to executable)) {
                 onFirstCallback(moduleId, executable)
             }
             runCatching { delegate.intercept(chain) }

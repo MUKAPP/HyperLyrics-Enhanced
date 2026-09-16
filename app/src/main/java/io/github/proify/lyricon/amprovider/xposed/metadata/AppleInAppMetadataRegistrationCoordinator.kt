@@ -19,9 +19,10 @@ internal class AppleInAppMetadataRegistrationCoordinator(
     private val dataBindingHooks: AppleDataBindingMetadataHooks,
     private val configuredContentUiLanguage: () -> Int,
 ) {
-    private val metadataTarget = runtime.hookResolver.resolveMethod(
-        AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_SUBMIT,
-    ).target
+    // 可空降级：MEDIA3 成员名载体（队列 submit 目标，6.5.3 起由 now-playing 目标兜底）；
+    // 两者都失败时元数据字段读取降级为 null，注册仍继续。
+    private val metadataTarget: AppleMusicHookTarget? =
+        runtime.hookResolver.resolveMedia3MetadataTarget()
     private val artistContainerClassName = runtime.hookResolver.resolveClass(
         AppleMusicHookPoint.IN_APP_CONTAINER_ARTIST_CLASS,
     ).target.className
@@ -285,14 +286,16 @@ internal class AppleInAppMetadataRegistrationCoordinator(
     )
 
     private fun registerMetadataRef(mediaId: String, metadata: Any) {
-        val originalTitle = AppleReflection.field(
-            metadata,
-            metadataTarget.runtimeMemberName(AppleMusicRuntimeMember.MEDIA3_METADATA_TITLE_FIELD),
-        )
-        val originalArtist = AppleReflection.field(
-            metadata,
-            metadataTarget.runtimeMemberName(AppleMusicRuntimeMember.MEDIA3_METADATA_ARTIST_FIELD),
-        )
+        val originalTitle = metadataTarget?.runtimeMemberNameOrNull(
+            AppleMusicRuntimeMember.MEDIA3_METADATA_TITLE_FIELD,
+        )?.let { fieldName ->
+            runCatching { AppleReflection.field(metadata, fieldName) }.getOrNull()
+        }
+        val originalArtist = metadataTarget?.runtimeMemberNameOrNull(
+            AppleMusicRuntimeMember.MEDIA3_METADATA_ARTIST_FIELD,
+        )?.let { fieldName ->
+            runCatching { AppleReflection.field(metadata, fieldName) }.getOrNull()
+        }
         mergePlaybackAccountMetadata(mediaId, originalTitle?.toString(), originalArtist?.toString())
         registry.registerMetadata(
             mediaId = mediaId,

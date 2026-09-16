@@ -707,6 +707,296 @@ internal object AppleMusicHookProfiles {
         ) + stableAtmosDiagnosticHookTargets() + atmosLoudnessMetadataHookTargets(),
     )
 
+    private val APPLE_MUSIC_6_5_3 by lazy { appleMusic653Profile() }
+
+    private fun appleMusic653Profile() = AppleMusicHookProfile(
+        id = "am-6.5.3-1599",
+        versionName = "6.5.3",
+        versionCodes = setOf(1599L),
+        hookTargets = verified653InheritedTargets() + mapOf(
+            // Original 1599 classes3.dex: SettingsFragment.t1()V at 0x2d6380 still owns the
+            // category build; code-unit 0x00a3 now calls LOa/c;->e(Landroid/content/Context;)Z.
+            AppleMusicHookPoint.SETTINGS_DATA_CATEGORY_BUILD to listOf(
+                AppleMusicHookTarget(
+                    className = "com.apple.android.music.settings.fragment.SettingsFragment",
+                    methodName = "t1",
+                    parameterCount = 0,
+                    parameterTypeNames = emptyList(),
+                    returnTypeName = "void",
+                    isStatic = false,
+                ),
+            ),
+            // Original descriptor LOa/c;->e(Landroid/content/Context;)Z, PUBLIC STATIC,
+            // code offset 0x166ed8: TelephonyManager.getSimState(), rejects 0 and 1.
+            // 6.5.2's La.c#e moved to Oa.c#e; La.c was repurposed as a date formatter.
+            AppleMusicHookPoint.SETTINGS_CELLULAR_SIM_CHECK to listOf(
+                AppleMusicHookTarget(
+                    className = "Oa.c",
+                    methodName = "e",
+                    parameterCount = 1,
+                    parameterTypeNames = listOf("android.content.Context"),
+                    returnTypeName = "boolean",
+                    isStatic = true,
+                ),
+            ),
+            // Original 1599 classes2.dex: FuseConnectivityChecker.isCellularAvailable()Z is
+            // retained unchanged from 6.5.2 (non-synthetic/non-bridge instance method).
+            AppleMusicHookPoint.CELLULAR_AVAILABILITY to listOf(
+                AppleMusicHookTarget(
+                    className = "com.apple.android.music.playback.connectivity.FuseConnectivityChecker",
+                    methodName = "isCellularAvailable",
+                    parameterCount = 0,
+                    parameterTypeNames = emptyList(),
+                    returnTypeName = "boolean",
+                    isStatic = false,
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes2.dex: the playback
+            // callbacks retain the same exact descriptors as 6.5.0-6.5.2.
+            AppleMusicHookPoint.EXO_AUDIO_SESSION_ID to listOf(exoAudioSessionIdTarget()),
+            AppleMusicHookPoint.LOCAL_MEDIA_PLAYER_AUDIO_VARIANT_CHANGED to listOf(
+                localMediaPlayerAudioVariantChangedTarget(),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes2.dex code offset 0x665158:
+            // u8.E.c0(Map)LinkedHashMap, PUBLIC STATIC, reads Locale.getDefault() and
+            // Map.put("l", languageTag). The media-api cluster moved s8 -> u8.
+            AppleMusicHookPoint.MEDIA_API_LOCALIZATION to listOf(
+                AppleMusicHookTarget(
+                    "u8.E", "c0", 1,
+                    parameterTypeNames = listOf("java.util.Map"),
+                    returnTypeName = "java.util.LinkedHashMap",
+                    isStatic = true,
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes3.dex code offset 0x41e590:
+            // ka.a.a(RealInterceptorChain)Response, PUBLIC instance. ka.a is the app
+            // cookie interceptor registered on the main OkHttp client (ka.g), and every
+            // member letter of the OkHttp surface (chain request e, url a, headers c,
+            // newBuilder b, builder url h / header d / build b, headers get e / values a,
+            // response status d / request a / headers f) is unchanged from 6.5.2.
+            AppleMusicHookPoint.CONTENT_HTTP_LOCALIZATION to listOf(
+                contentHttpLocalizationTarget(className = "ka.a").copy(
+                    parameterTypeNames = listOf("Li.f"),
+                    returnTypeName = "Gi.D",
+                    isStatic = false,
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes2.dex code offset 0x6737ec:
+            // v8.N0.d(Long dsid, String userAgent, String authorization, String storefront,
+            // String id, Map query, Continuation) - same argument positions as 6.5.2's
+            // t8.N0#z, and its body carries the "syllable-lyrics" path constant.
+            AppleMusicHookPoint.LYRICS_NETWORK_REQUEST to listOf(
+                lyricsNetworkRequestTarget(className = "v8.N0", methodName = "d").copy(
+                    parameterCount = 7,
+                    parameterTypeNames = listOf(
+                        "java.lang.Long", "java.lang.String", "java.lang.String",
+                        "java.lang.String", "java.lang.String", "java.util.Map", "Hg.c",
+                    ),
+                    returnTypeName = "java.lang.Object",
+                    isStatic = false,
+                    allowFirstMatch = false,
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes3.dex code offset 0x41f91c:
+            // ka.k.b(HttpUrl)List is the account cookie jar feeding
+            // CookieStoreInterface cookies through Gi.l$b (obfuscated Cookie.parse);
+            // the obfuscated Cookie class Gi.l keeps name field "a" and value field "b".
+            AppleMusicHookPoint.LYRICS_COOKIE_JAR to listOf(
+                lyricsCookieJarTarget(className = "ka.k", methodName = "b").copy(
+                    parameterTypeNames = listOf("Gi.u"),
+                    returnTypeName = "java.util.List",
+                    isStatic = false,
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes2.dex: the generated
+            // DataBinding package moved l7 -> n7. n7.N2.l()V reads the PlaybackItem from
+            // inherited field n7.M2.g0, gates it with player.e1.i (unchanged), and applies
+            // the result to the lyrics button inherited field n7.M2.Y via setEnabled.
+            AppleMusicHookPoint.PLAYER_SONG_BINDING_EXECUTE to listOf(
+                AppleMusicHookTarget(
+                    className = "n7.N2",
+                    methodName = "l",
+                    parameterCount = 0,
+                    parameterTypeNames = emptyList(),
+                    returnTypeName = "void",
+                    isStatic = false,
+                    runtimeMemberNames = mapOf(
+                        AppleMusicRuntimeMember.PLAYER_SONG_BINDING_PLAYBACK_ITEM_FIELD to "g0",
+                        AppleMusicRuntimeMember.PLAYER_SONG_BINDING_LYRICS_BUTTON_FIELD to "Y",
+                    ),
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes2.dex: the action sheet
+            // binding lineage (l7.e8 -> l7.f8 -> n7.h8) - n7.h8 is the concrete impl of
+            // abstract n7.g8, whose layout holds five CustomTextViews plus the single
+            // CollectionItemView field Y required by the runtime contract.
+            AppleMusicHookPoint.IN_APP_ACTION_SHEET_BINDING to listOf(
+                AppleMusicHookTarget("n7.h8", "l", 0),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes2.dex: same lambda anchor,
+            // the captured controller type moved from common.F0 to common.B0.
+            AppleMusicHookPoint.LISTEN_NOW_MODEL_BUILDER to listOf(
+                AppleMusicHookTarget(
+                    className =
+                        "com.apple.android.music.listennow.ListenNowEpoxyController",
+                    methodName = "buildStandardSwoosh\$lambda\$35",
+                    parameterCount = 5,
+                    parameterTypeNames = listOf(
+                        "com.apple.android.music.listennow.ListenNowEpoxyController",
+                        "com.apple.android.music.mediaapi.models.Recommendation",
+                        "com.apple.android.music.common.B0",
+                        "com.apple.android.music.mediaapi.models.MediaEntity",
+                        "java.util.List",
+                    ),
+                    returnTypeName = "com.airbnb.epoxy.l",
+                    isStatic = true,
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599): common.I is the artwork lookup
+            // resolver successor (6.5.2 common.L, 6.5.1 common.J); contract still
+            // requires the CollectionItemView-parameter void instance method t.
+            AppleMusicHookPoint.LISTEN_NOW_ARTWORK_RESOLVER to listOf(
+                AppleMusicHookTarget(
+                    className = "com.apple.android.music.common.I",
+                    methodName = "t",
+                    parameterCount = 1,
+                    parameterTypeNames = listOf(
+                        "com.apple.android.music.model.CollectionItemView"
+                    ),
+                    returnTypeName = "void",
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes2.dex: the concrete
+            // buildModels override now carries (library2.H, List, List, library2.a, z6.b);
+            // its body still invokes buildPageTitleModel/buildBannerModel/
+            // getModelCountBuiltSoFar, and the Object[] bridge must stay excluded.
+            AppleMusicHookPoint.LIBRARY_EPOXY_BUILD to listOf(
+                AppleMusicHookTarget(
+                    className =
+                        "com.apple.android.music.library2.LibraryMainContentEpoxyController",
+                    methodName = "buildModels",
+                    parameterCount = 5,
+                    parameterTypeNames = listOf(
+                        "com.apple.android.music.library2.H",
+                        "java.util.List",
+                        "java.util.List",
+                        "com.apple.android.music.library2.a",
+                        "z6.b",
+                    ),
+                    returnTypeName = "void",
+                    requiredInvokedMethodNames = listOf(
+                        "buildPageTitleModel",
+                        "buildBannerModel",
+                        "getModelCountBuiltSoFar",
+                    ),
+                    requiredCallerMethodNames = listOf("buildModels"),
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes.dex: the Compose text
+            // layout pair moved from z1.q/z1.i to z1.x (14-param primary) and
+            // z1.m (3-param intrinsics); both constructors begin with CharSequence
+            // and receive TextPaint, enforced by RequireComposeTextLayoutClass.
+            AppleMusicHookPoint.COMPOSE_TEXT_LAYOUT to listOf(
+                AppleMusicHookTarget(
+                    className = "z1.x",
+                    contract = RequireComposeTextLayoutClass(
+                        AppleComposeTextLayoutRole.PRIMARY,
+                    ),
+                ),
+                AppleMusicHookTarget(
+                    className = "z1.m",
+                    contract = RequireComposeTextLayoutClass(
+                        AppleComposeTextLayoutRole.INTRINSICS,
+                    ),
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599): utils.d1$a keeps the explicit
+            // title formatter c(CustomTextView, String, boolean) and the unique
+            // Context/AttributeSet Typeface factory j(Context, AttributeSet, R6.a, Pg.a).
+            AppleMusicHookPoint.APPLE_TEXT_STYLE_UTILS to listOf(
+                AppleMusicHookTarget(
+                    className = "com.apple.android.music.utils.d1\$a",
+                    runtimeMemberNames = mapOf(
+                        AppleMusicRuntimeMember.APPLE_TEXT_STYLE_EXPLICIT_TITLE_METHOD to "c",
+                    ),
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes.dex: z0.p0 is the
+            // NeverEqualPolicy singleton (static self-typed field a; a(Object,Object)
+            // returns constant false). 6.5.2's z0.s0 name now holds an unrelated class.
+            AppleMusicHookPoint.COMPOSE_NEVER_EQUAL_POLICY to listOf(
+                AppleMusicHookTarget("z0.p0"),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes4.dex: observeAsState moved
+            // from C1.w.e to Dg.c.l(androidx.lifecycle.G, z0.m) returning z0.n0. Its body
+            // still invokes getValue/isInitialized on the LiveData and the returned
+            // SnapshotMutableStateImpl (z0.n1) keeps policy field b + getValue/setValue.
+            AppleMusicHookPoint.COMPOSE_OBSERVE_AS_STATE to listOf(
+                AppleMusicHookTarget(
+                    className = "Dg.c",
+                    methodName = "l",
+                    parameterCount = 2,
+                    parameterTypeNames = listOf(
+                        "androidx.lifecycle.G",
+                        "z0.m",
+                    ),
+                    returnTypeName = "z0.n0",
+                    isStatic = true,
+                    requiredInvokedMethodNames = listOf(
+                        "getValue",
+                        "isInitialized",
+                    ),
+                    runtimeMemberNames = mapOf(
+                        AppleMusicRuntimeMember.LIBRARY_COMPOSE_STATE_POLICY_FIELD to "b",
+                        AppleMusicRuntimeMember.LIBRARY_COMPOSE_STATE_GET_VALUE_METHOD to
+                            "getValue",
+                        AppleMusicRuntimeMember.LIBRARY_COMPOSE_STATE_SET_VALUE_METHOD to
+                            "setValue",
+                    ),
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes2.dex: the lyrics
+            // translation/pronunciation popup is still opened by
+            // player.fragment.d0#onClick, unchanged from 6.5.2.
+            AppleMusicHookPoint.LYRICS_SOURCE_MENU_CLICK_LISTENER to listOf(
+                AppleMusicHookTarget(
+                    className = "com.apple.android.music.player.fragment.d0",
+                    methodName = "onClick",
+                    parameterCount = 1,
+                    parameterTypeNames = listOf("android.view.View"),
+                    returnTypeName = "void",
+                    runtimeMemberNames = mapOf(
+                        AppleMusicRuntimeMember.LYRICS_SOURCE_MENU_FRAGMENT_FIELD to "a",
+                        AppleMusicRuntimeMember.LYRICS_SOURCE_MENU_FRAGMENT_CLASS to
+                            "com.apple.android.music.player.fragment.PlayerLyricsViewFragment",
+                    ),
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599) classes2.dex: the global metadata
+            // dispatcher remains player.e#onMediaMetadataChanged(Lv3/v;)V.
+            AppleMusicHookPoint.IN_APP_GLOBAL_METADATA_DISPATCHER to listOf(
+                AppleMusicHookTarget(
+                    className = "com.apple.android.music.player.e",
+                    methodName = "onMediaMetadataChanged",
+                    parameterCount = 1,
+                    returnTypeName = "void",
+                ),
+            ),
+            // Verified from Apple Music 6.5.3 (1599): LibraryComposeContentFragment.F0()
+            // is the unique zero-parameter getter returning library2.LibraryViewModel
+            // (6.5.1's A0 no longer exists; 6.5.2 never re-pinned this point).
+            AppleMusicHookPoint.LIBRARY_COMPOSE_VIEW_MODEL_GETTER to listOf(
+                AppleMusicHookTarget(
+                    "com.apple.android.music.library3.LibraryComposeContentFragment",
+                    "F0",
+                    0,
+                    returnTypeName = "com.apple.android.music.library2.LibraryViewModel",
+                ),
+            ),
+        ) + stableAtmosDiagnosticHookTargets() + atmosLoudnessMetadataHookTargets() +
+            appleMusic653RestoredTargets(),
+    )
+
     private val APPLE_MUSIC_6_5_1 = AppleMusicHookProfile(
         id = "am-6.5.1-1583",
         versionName = "6.5.1",
@@ -905,8 +1195,157 @@ internal object AppleMusicHookProfiles {
             stableAtmosDiagnosticHookTargets(),
     )
 
+    /**
+     * 1599 was checked against the original DEX, including every inherited class group.
+     * Keep unchanged targets exact instead of resolving a union of older, now-repurposed
+     * obfuscated classes. Overrides below repair changed owners AND downstream members.
+     * This is evaluated lazily, after all older profiles have been initialized.
+     */
+    private fun verified653InheritedTargets(): Map<AppleMusicHookPoint, List<AppleMusicHookTarget>> =
+        AppleMusicHookPoint.entries.associateWith { point ->
+            APPLE_MUSIC_6_5_2.targets(point)
+                .ifEmpty { APPLE_MUSIC_6_5_1.targets(point) }
+                .ifEmpty { APPLE_MUSIC_6_5_0.targets(point) }
+        }.filterValues { it.isNotEmpty() }
+
+    private fun appleMusic653RestoredTargets(): Map<AppleMusicHookPoint, List<AppleMusicHookTarget>> {
+        val inherited = verified653InheritedTargets()
+        fun target(point: AppleMusicHookPoint) = inherited.getValue(point).single()
+        return mapOf(
+            // Original classes2.dex: a9.a is the RecyclerView ListAdapter, B(List)V
+            // submits b9 entries; p(RecyclerView$D,I)V reads inherited A(I)Object.
+            // Its list l, b9.e.b -> v3.t.d -> v3.v.{I,a,b} remain unchanged.
+            AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_SUBMIT to listOf(
+                target(AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_SUBMIT).copy(
+                    className = "a9.a",
+                    parameterTypeNames = listOf("java.util.List"),
+                    returnTypeName = "void",
+                    isStatic = false,
+                ),
+            ),
+            AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_BIND to listOf(
+                target(AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_BIND).copy(
+                    className = "a9.a",
+                    parameterTypeNames = listOf("androidx.recyclerview.widget.RecyclerView\$D", "int"),
+                    returnTypeName = "void",
+                    isStatic = false,
+                ),
+            ),
+            // NewPlayerQueueViewModel.updateHistory(List)V constructs b9.d entries.
+            AppleMusicHookPoint.IN_APP_HISTORY_UPDATE to listOf(
+                target(AppleMusicHookPoint.IN_APP_HISTORY_UPDATE).copy(
+                    parameterTypeNames = listOf("java.util.List"),
+                    returnTypeName = "void",
+                    isStatic = false,
+                    runtimeMemberNames = mapOf(
+                        AppleMusicRuntimeMember.QUEUE_HISTORY_ENTRY_CLASS_NAME to "b9.d",
+                    ),
+                ),
+            ),
+            // Lcom/apple/android/music/player/P; owns static a(v3.v)BaseContentItem
+            // and b(v3.v)PlaybackItem. O still exists, but is now a lyrics enum.
+            AppleMusicHookPoint.APPLE_PLAYER_UTIL_CLASS to listOf(
+                target(AppleMusicHookPoint.APPLE_PLAYER_UTIL_CLASS).copy(
+                    className = "com.apple.android.music.player.P",
+                ),
+            ),
+            // Lu8/E;->v(String,Map,Continuation)Object at code_off 0x65691c creates
+            // E$c, which forwards the requested URL/query to w8.h.d. B is no longer
+            // this API (its first argument is Hg.c). Do not infer this from arity.
+            AppleMusicHookPoint.MEDIA_API_REPOSITORY_HOLDER_CLASS to listOf(
+                target(AppleMusicHookPoint.MEDIA_API_REPOSITORY_HOLDER_CLASS).let { old ->
+                    old.copy(runtimeMemberNames = old.runtimeMemberNames + mapOf(
+                        AppleMusicRuntimeMember.MEDIA_API_DIRECT_QUERY_METHOD to "v",
+                    ))
+                },
+            ),
+            // Original fragment onCreateView/getRecyclerView/I2/N2: g0:n7.j5,
+            // j5.Y:RecyclerView, h1:PlayerLyricsViewModel, i0:i1 (active adapter).
+            // k0 is ONLY the word adapter; j0 is the line adapter. Never pin k0.
+            AppleMusicHookPoint.LYRICS_UI_ON_CREATE_VIEW to listOf(
+                target(AppleMusicHookPoint.LYRICS_UI_ON_CREATE_VIEW).let { old ->
+                    old.copy(
+                        parameterTypeNames = listOf(
+                            "android.view.LayoutInflater", "android.view.ViewGroup", "android.os.Bundle",
+                        ),
+                        returnTypeName = "android.view.View",
+                        isStatic = false,
+                        runtimeMemberNames = old.runtimeMemberNames + mapOf(
+                            AppleMusicRuntimeMember.LYRICS_UI_BINDING_FIELD to "g0",
+                            AppleMusicRuntimeMember.LYRICS_UI_BINDING_RECYCLER_FIELD to "Y",
+                            AppleMusicRuntimeMember.LYRICS_UI_ADAPTER_FIELD to "i0",
+                            AppleMusicRuntimeMember.LYRICS_UI_VIEW_MODEL_FIELD to "h1",
+                        ),
+                        contract = AllOfContract(
+                            RequireFieldOfType("n7.j5", fieldName = "g0"),
+                            RequireFieldOfType(
+                                "com.apple.android.music.player.viewmodel.PlayerLyricsViewModel",
+                                fieldName = "h1",
+                            ),
+                        ),
+                    )
+                },
+            ),
+            // buildStandardSwoosh$lambda$35 new-instance is music.i1, NOT music.l1.
+            // l1 now belongs to EditorialGroupingEpoxyController (same Epoxy base).
+            AppleMusicHookPoint.LISTEN_NOW_MODEL to listOf(
+                AppleMusicHookTarget(
+                    className = "com.apple.android.music.i1",
+                    contract = RequireFieldOfType(
+                        "com.apple.android.music.listennow.ListenNowEpoxyController\$R",
+                    ),
+                ),
+            ),
+            // Original ViewDataBinding declares abstract A()V (invalidateAll).
+            // n()V executes pending bindings; k0(int,databinding.i) and h0(int,Object)
+            // retain registration/setVariable roles. y is now a field, not a method.
+            AppleMusicHookPoint.DATA_BINDING_RUNTIME_CLASSES to
+                inherited.getValue(AppleMusicHookPoint.DATA_BINDING_RUNTIME_CLASSES).map { old ->
+                    if (old.className == "androidx.databinding.ViewDataBinding") {
+                        old.copy(runtimeMemberNames = old.runtimeMemberNames + mapOf(
+                            AppleMusicRuntimeMember.DATA_BINDING_INVALIDATE_METHOD to "A",
+                        ))
+                    } else old
+                },
+            // Original AlbumPageController builds music.i / m6.c extends m6.b.
+            // Playlist track models extend m6.d; its bind reads title M / subtitle N.
+            // k6.* still contains classes, but no longer these row-model owners.
+            AppleMusicHookPoint.COLLECTION_SURFACE_CLASSES to
+                inherited.getValue(AppleMusicHookPoint.COLLECTION_SURFACE_CLASSES).map { old ->
+                    when (old.runtimeMemberName(AppleMusicRuntimeMember.COLLECTION_RUNTIME_ROLE)) {
+                        "album_header_model" -> old.copy(className = "com.apple.android.music.i")
+                        "album_row_model" -> old.copy(className = "m6.b")
+                        "playlist_row_model" -> old.copy(
+                            className = "m6.d",
+                            runtimeMemberNames = old.runtimeMemberNames + mapOf(
+                                AppleMusicRuntimeMember.COLLECTION_PLAYLIST_SUBTITLE_FIELD to "N",
+                            ),
+                        )
+                        else -> old
+                    }
+                },
+            // BaseProfileEpoxyController.addSwipingChartItemA2 writes music.e1.L
+            // from getTitle(), e1.N from the subtitle formatter, caption e1.H.
+            // ArtistEpoxyController's header subclass extends music.S, title x.
+            AppleMusicHookPoint.ARTIST_SURFACE_CLASSES to
+                inherited.getValue(AppleMusicHookPoint.ARTIST_SURFACE_CLASSES).map { old ->
+                    when (old.runtimeMemberName(AppleMusicRuntimeMember.ARTIST_RUNTIME_ROLE)) {
+                        "top_song_model" -> old.copy(
+                            className = "com.apple.android.music.e1",
+                            runtimeMemberNames = old.runtimeMemberNames + mapOf(
+                                AppleMusicRuntimeMember.ARTIST_TOP_SONG_SUBTITLE_FIELD to "N",
+                            ),
+                        )
+                        "header_model" -> old.copy(className = "com.apple.android.music.S")
+                        else -> old
+                    }
+                },
+        )
+    }
+
     /** 新版本档案必须放在前面，未知版本回退时优先尝试较新的目标。 */
     private val KNOWN_PROFILES = listOf(
+        APPLE_MUSIC_6_5_3,
         APPLE_MUSIC_6_5_2,
         APPLE_MUSIC_6_5_1,
         APPLE_MUSIC_6_5_0,
@@ -922,11 +1361,22 @@ internal object AppleMusicHookProfiles {
             ),
         ),
         AppleMusicHookPoint.IN_APP_NOW_PLAYING_METADATA_LISTENER to listOf(
+            // 首参即 Media3 MediaMetadata，兼任 MEDIA3 成员名兜底载体：队列适配器 submit 类
+            // 被混淆重排无法解析的版本（如 6.5.3）由该目标提供 bundle/title/artist 字段名。
+            // 6.5.3 DEX 核对：PlayerSongViewFragment$PlayerListener.onMediaMetadataChanged
+            // (Lv3/v;)V 仍为命名类 + 命名方法；v3.v 的 extras Bundle=I（全类唯一 Bundle），
+            // title=a、artist=b（media3 声明序前两个 CharSequence），与 6.5.1/6.5.2 共享
+            // SUBMIT 目标已验证的成员名一致。
             AppleMusicHookTarget(
                 "com.apple.android.music.player.fragment." +
                     "PlayerSongViewFragment\$PlayerListener",
                 "onMediaMetadataChanged",
                 1,
+                runtimeMemberNames = mapOf(
+                    AppleMusicRuntimeMember.MEDIA3_METADATA_BUNDLE_FIELD to "I",
+                    AppleMusicRuntimeMember.MEDIA3_METADATA_TITLE_FIELD to "a",
+                    AppleMusicRuntimeMember.MEDIA3_METADATA_ARTIST_FIELD to "b",
+                ),
             ),
         ),
         AppleMusicHookPoint.IN_APP_QUEUE_UPDATE to listOf(
@@ -1391,8 +1841,10 @@ internal object AppleMusicHookProfiles {
         ),
     )
 
-    private fun contentHttpLocalizationTarget() = AppleMusicHookTarget(
-        className = "u8.a",
+    private fun contentHttpLocalizationTarget(
+        className: String = "u8.a",
+    ) = AppleMusicHookTarget(
+        className = className,
         methodName = "a",
         parameterCount = 1,
         runtimeMemberNames = mapOf(
@@ -1697,15 +2149,21 @@ internal object AppleMusicHookProfiles {
         allowFirstMatch = true,
     )
 
-    private fun lyricsNetworkRequestTarget() = AppleMusicHookTarget(
-        className = "t8.N0",
-        methodName = "z",
+    private fun lyricsNetworkRequestTarget(
+        className: String = "t8.N0",
+        methodName: String = "z",
+    ) = AppleMusicHookTarget(
+        className = className,
+        methodName = methodName,
         allowFirstMatch = true,
     )
 
-    private fun lyricsCookieJarTarget() = AppleMusicHookTarget(
-        className = "s8.b",
-        methodName = "d",
+    private fun lyricsCookieJarTarget(
+        className: String = "s8.b",
+        methodName: String = "d",
+    ) = AppleMusicHookTarget(
+        className = className,
+        methodName = methodName,
         parameterCount = 1,
         runtimeMemberNames = mapOf(
             AppleMusicRuntimeMember.LYRICS_COOKIE_NAME_FIELD to "a",
@@ -2022,7 +2480,15 @@ internal object AppleMusicHookProfiles {
         hookPoint: AppleMusicHookPoint,
     ): List<AppleMusicHookTarget> {
         val exact = exactTargets(version, hookPoint)
-        return (exact + KNOWN_PROFILES.flatMap { profile -> profile.targets(hookPoint) })
+        val known = profileFor(version)
+        // 1599 reordered the runtime namespace. Do not inject its complete target set
+        // into the sparse 6.5.0-6.5.2 profiles: e.g. 1586's player.P is not the 1599 util.
+        // Preserve the OLD compatibility pool within 6.5.0-6.5.2 (650 intentionally
+        // borrows some 651 groups). Unknown APKs still try newest-first.
+        val compatible = if (known == null || known === APPLE_MUSIC_6_5_3) KNOWN_PROFILES else {
+            KNOWN_PROFILES.filterNot { it === APPLE_MUSIC_6_5_3 }
+        }
+        return (exact + compatible.flatMap { profile -> profile.targets(hookPoint) })
             .distinct()
     }
 }
@@ -2290,6 +2756,30 @@ internal class AppleMusicHookResolver(
                 failures.joinToString(),
         )
     }
+
+    /**
+     * 失败可降级的方法解析：目标缺失（如新版本混淆重排后的队列适配器）返回 null 而不是
+     * 抛出异常，让调用方跳过该子功能；解析失败的完整原因记入诊断日志。
+     */
+    fun resolveMethodOrNull(hookPoint: AppleMusicHookPoint): ResolvedAppleMusicHookMethod? =
+        runCatching { resolveMethod(hookPoint) }
+            .onFailure {
+                ProviderLogger.diagnostic(
+                    "Apple Music Hook 目标解析失败，降级跳过: hook=$hookPoint, " +
+                        "reason=${it.message}",
+                )
+            }
+            .getOrNull()
+
+    /**
+     * MEDIA3 元数据成员名载体：Media3 MediaMetadata 的 bundle/title/artist 字段名随版本
+     * 混淆重排，历史上由队列适配器 submit 目标携带（其条目的 metadata 即该类）。6.5.3 起
+     * submit 类无法解析，改用同样以 Media3 MediaMetadata 为首参的 now-playing 监听目标
+     * 兜底（其 6.5.3 目标携带二进制核对的成员名）。仅在调用期解析，两者都失败返回 null。
+     */
+    fun resolveMedia3MetadataTarget(): AppleMusicHookTarget? =
+        resolveMethodOrNull(AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_SUBMIT)?.target
+            ?: resolveMethodOrNull(AppleMusicHookPoint.IN_APP_NOW_PLAYING_METADATA_LISTENER)?.target
 
     private fun resolveDexKitMethod(
         hookPoint: AppleMusicHookPoint,

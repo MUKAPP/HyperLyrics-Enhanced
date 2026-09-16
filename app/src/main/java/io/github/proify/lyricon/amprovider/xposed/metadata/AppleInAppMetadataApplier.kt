@@ -29,9 +29,10 @@ internal class AppleInAppMetadataApplier(
 ) {
     private val callbackAppliedAliases =
         Collections.synchronizedMap(WeakHashMap<Any, AppliedMetadataAlias>())
-    private val metadataTarget = runtime.hookResolver.resolveMethod(
-        AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_SUBMIT,
-    ).target
+    // 可空降级：MEDIA3 成员名载体（队列 submit 目标，6.5.3 起由 now-playing 目标兜底）；
+    // 两者都失败时跳过元数据字段改写，其余表面的别名应用不受影响。
+    private val metadataTarget: AppleMusicHookTarget? =
+        runtime.hookResolver.resolveMedia3MetadataTarget()
     private val contentItemTarget by lazy {
         runtime.hookResolver.resolveClasses(AppleMusicHookPoint.CONTENT_ITEM_METADATA_CLASSES)
             .first { resolved ->
@@ -274,16 +275,12 @@ internal class AppleInAppMetadataApplier(
     fun restoreCapturedModels() {
         registry.allLiveMetadataRefs().forEach { ref ->
             ref.metadata.get()?.let { metadata ->
-                AppleReflection.setField(
-                    metadata,
-                    member(AppleMusicRuntimeMember.MEDIA3_METADATA_TITLE_FIELD),
-                    ref.originalTitle,
-                )
-                AppleReflection.setField(
-                    metadata,
-                    member(AppleMusicRuntimeMember.MEDIA3_METADATA_ARTIST_FIELD),
-                    ref.originalArtist,
-                )
+                member(AppleMusicRuntimeMember.MEDIA3_METADATA_TITLE_FIELD)?.let { titleField ->
+                    AppleReflection.setField(metadata, titleField, ref.originalTitle)
+                }
+                member(AppleMusicRuntimeMember.MEDIA3_METADATA_ARTIST_FIELD)?.let { artistField ->
+                    AppleReflection.setField(metadata, artistField, ref.originalArtist)
+                }
             }
         }
         registry.allLivePlaybackItemRefs().values.flatten().forEach { ref ->
@@ -619,15 +616,15 @@ internal class AppleInAppMetadataApplier(
         value: String,
     ) {
         value.takeIf(String::isNotBlank)?.let { replacement ->
-            val fieldName = member(runtimeMember)
+            val fieldName = member(runtimeMember) ?: return
             val current = runCatching { AppleReflection.field(metadata, fieldName) }
                 .getOrNull()?.toString()
             if (current != replacement) AppleReflection.setField(metadata, fieldName, replacement)
         }
     }
 
-    private fun member(runtimeMember: AppleMusicRuntimeMember): String =
-        metadataTarget.runtimeMemberName(runtimeMember)
+    private fun member(runtimeMember: AppleMusicRuntimeMember): String? =
+        metadataTarget?.runtimeMemberNameOrNull(runtimeMember)
 
     private fun containerTarget(kind: InAppContainerKind): AppleMusicHookTarget = when (kind) {
         InAppContainerKind.ARTIST -> artistContainerTarget

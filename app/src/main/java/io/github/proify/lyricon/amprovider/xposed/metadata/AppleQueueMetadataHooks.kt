@@ -99,31 +99,53 @@ internal class AppleQueueMetadataHooks(
 
     private val queueAdapterRefs = ConcurrentLinkedQueue<WeakReference<RecyclerView.Adapter<*>>>()
     private val debugQueueBindTraceKeys = ConcurrentHashMap.newKeySet<String>()
-    private lateinit var queueAdapterTarget: AppleMusicHookTarget
-    private lateinit var historyTarget: AppleMusicHookTarget
+    // 可空降级：目标缺失（如 6.5.3 队列适配器被混淆重排）时对应捕获子功能跳过安装，
+    // 成员名读取返回 null，不影响其余 Hook 与提供器初始化。
+    private var queueAdapterTarget: AppleMusicHookTarget? = null
+    private var historyTarget: AppleMusicHookTarget? = null
 
     fun installHooks() {
-        val global = runtime.hookResolver.resolveMethod(
-            AppleMusicHookPoint.IN_APP_GLOBAL_METADATA_DISPATCHER
+        val history = runtime.hookResolver.resolveMethodOrNull(
+            AppleMusicHookPoint.IN_APP_HISTORY_UPDATE,
         )
-        val nowPlaying = runtime.hookResolver.resolveMethod(
-            AppleMusicHookPoint.IN_APP_NOW_PLAYING_METADATA_LISTENER
-        )
-        val queue = runtime.hookResolver.resolveMethod(AppleMusicHookPoint.IN_APP_QUEUE_UPDATE)
-        val history = runtime.hookResolver.resolveMethod(AppleMusicHookPoint.IN_APP_HISTORY_UPDATE)
-        val adapterSubmit = runtime.hookResolver.resolveMethod(
-            AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_SUBMIT
-        )
-        val adapterBind = runtime.hookResolver.resolveMethod(
-            AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_BIND
-        )
-        queueAdapterTarget = adapterSubmit.target
-        historyTarget = history.target
+        historyTarget = history?.target
+        queueAdapterTarget = runtime.hookResolver.resolveMethodOrNull(
+            AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_SUBMIT,
+        )?.target
 
-        installGlobalMetadataCapture(global)
-        installNowPlayingMetadata(nowPlaying)
-        installQueueAndHistory(queue, history)
-        installQueueAdapter(adapterSubmit, adapterBind)
+        runtime.hookResolver.resolveMethodOrNull(
+            AppleMusicHookPoint.IN_APP_GLOBAL_METADATA_DISPATCHER,
+        )?.let(::installGlobalMetadataCapture)
+            ?: ProviderLogger.info(
+                "Apple Music App 全局元数据捕获 Hook 未安装: 目标解析失败，已跳过",
+            )
+        runtime.hookResolver.resolveMethodOrNull(
+            AppleMusicHookPoint.IN_APP_NOW_PLAYING_METADATA_LISTENER,
+        )?.let(::installNowPlayingMetadata)
+            ?: ProviderLogger.info(
+                "Apple Music App 播放页元数据 Hook 未安装: 目标解析失败，已跳过",
+            )
+        val queue = runtime.hookResolver.resolveMethodOrNull(AppleMusicHookPoint.IN_APP_QUEUE_UPDATE)
+        if (queue != null && history != null) {
+            installQueueAndHistory(queue, history)
+        } else {
+            ProviderLogger.info(
+                "Apple Music App 播放列表/历史记录元数据 Hook 未安装: 目标解析失败，已跳过",
+            )
+        }
+        val adapterSubmit = runtime.hookResolver.resolveMethodOrNull(
+            AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_SUBMIT,
+        )
+        val adapterBind = runtime.hookResolver.resolveMethodOrNull(
+            AppleMusicHookPoint.IN_APP_QUEUE_ADAPTER_BIND,
+        )
+        if (adapterSubmit != null && adapterBind != null) {
+            installQueueAdapter(adapterSubmit, adapterBind)
+        } else {
+            ProviderLogger.info(
+                "Apple Music App 播放列表 Adapter 捕获 Hook 未安装: 目标解析失败，已跳过",
+            )
+        }
     }
 
     fun currentNowPlayingRefresh(): InAppNowPlayingRefresh? = currentNowPlayingRefresh
@@ -354,29 +376,26 @@ internal class AppleQueueMetadataHooks(
         if (!registered) queueAdapterRefs.add(WeakReference(adapter))
     }
 
+    /** 队列适配器目标缺失时成员名返回 null，调用方据此跳过条目读取。 */
+    private fun queueAdapterMemberName(member: AppleMusicRuntimeMember): String? =
+        queueAdapterTarget?.runtimeMemberNameOrNull(member)
+
     private fun queueEntryAt(adapter: Any, position: Int): InAppQueueEntryLookup {
-        val displayedEntry = runCatching {
-            AppleReflection.call(
-                adapter,
-                queueAdapterTarget.runtimeMemberName(
-                    AppleMusicRuntimeMember.QUEUE_ADAPTER_DISPLAYED_ENTRY_METHOD
-                ),
-                position,
-            )
-        }.getOrNull()
+        val displayedEntry = queueAdapterMemberName(
+            AppleMusicRuntimeMember.QUEUE_ADAPTER_DISPLAYED_ENTRY_METHOD,
+        )?.let { methodName ->
+            runCatching { AppleReflection.call(adapter, methodName, position) }.getOrNull()
+        }
         if (displayedEntry != null) {
             return InAppQueueEntryLookup(displayedEntry, "displayed_list")
         }
-        val submittedEntry = runCatching {
-            (
-                AppleReflection.field(
-                    adapter,
-                    queueAdapterTarget.runtimeMemberName(
-                        AppleMusicRuntimeMember.QUEUE_ADAPTER_SUBMITTED_ENTRIES_FIELD
-                    ),
-                ) as? List<*>
-                )?.getOrNull(position)
-        }.getOrNull()
+        val submittedEntry = queueAdapterMemberName(
+            AppleMusicRuntimeMember.QUEUE_ADAPTER_SUBMITTED_ENTRIES_FIELD,
+        )?.let { fieldName ->
+            runCatching {
+                (AppleReflection.field(adapter, fieldName) as? List<*>)?.getOrNull(position)
+            }.getOrNull()
+        }
         return InAppQueueEntryLookup(submittedEntry, "submitted_list_fallback")
     }
 
@@ -406,13 +425,15 @@ internal class AppleQueueMetadataHooks(
         )
     }
 
-    private fun isHistoryQueueEntry(entry: Any?): Boolean =
-        entry != null && isInAppHistoryQueueEntryClassName(
+    private fun isHistoryQueueEntry(entry: Any?): Boolean {
+        val historyEntryClassName = historyTarget?.runtimeMemberNameOrNull(
+            AppleMusicRuntimeMember.QUEUE_HISTORY_ENTRY_CLASS_NAME,
+        ) ?: return false
+        return entry != null && isInAppHistoryQueueEntryClassName(
             className = entry.javaClass.name,
-            historyEntryClassName = historyTarget.runtimeMemberName(
-                AppleMusicRuntimeMember.QUEUE_HISTORY_ENTRY_CLASS_NAME,
-            ),
+            historyEntryClassName = historyEntryClassName,
         )
+    }
 
     private fun registerQueueEntry(
         entry: Any?,
@@ -423,26 +444,20 @@ internal class AppleQueueMetadataHooks(
             RequestPriority.ACTIVE_PAGE,
     ): String? {
         entry ?: return null
-        val item = runCatching {
-            AppleReflection.field(
-                entry,
-                queueAdapterTarget.runtimeMemberName(AppleMusicRuntimeMember.QUEUE_ENTRY_ITEM_FIELD),
-            )
-        }.getOrNull() ?: return null
+        val item = queueAdapterMemberName(AppleMusicRuntimeMember.QUEUE_ENTRY_ITEM_FIELD)
+            ?.let { fieldName ->
+                runCatching { AppleReflection.field(entry, fieldName) }.getOrNull()
+            } ?: return null
         if (historyEntry) host.markPlaybackItemHistory(item)
-        val metadata = runCatching {
-            AppleReflection.field(
-                item,
-                queueAdapterTarget.runtimeMemberName(AppleMusicRuntimeMember.QUEUE_ITEM_METADATA_FIELD),
-            )
-        }.getOrNull()
+        val metadata = queueAdapterMemberName(AppleMusicRuntimeMember.QUEUE_ITEM_METADATA_FIELD)
+            ?.let { fieldName ->
+                runCatching { AppleReflection.field(item, fieldName) }.getOrNull()
+            }
         if (metadata != null) {
-            val itemId = runCatching {
-                AppleReflection.field(
-                    item,
-                    queueAdapterTarget.runtimeMemberName(AppleMusicRuntimeMember.QUEUE_ITEM_ID_FIELD),
-                ) as? String
-            }.getOrNull()
+            val itemId = queueAdapterMemberName(AppleMusicRuntimeMember.QUEUE_ITEM_ID_FIELD)
+                ?.let { fieldName ->
+                    runCatching { AppleReflection.field(item, fieldName) }.getOrNull() as? String
+                }
             val mediaId = host.media3MetadataId(metadata, itemId, true) ?: return null
             host.registerMetadata(
                 mediaId = mediaId,
@@ -494,25 +509,17 @@ internal class AppleQueueMetadataHooks(
             RequestPriority.BACKGROUND,
     ): String? {
         val historyEntry = isHistoryQueueEntry(entry)
-        val item = entry?.let {
-            runCatching {
-                AppleReflection.field(
-                    it,
-                    queueAdapterTarget.runtimeMemberName(
-                        AppleMusicRuntimeMember.QUEUE_ENTRY_ITEM_FIELD
-                    ),
-                )
-            }.getOrNull()
+        val item = entry?.let { nonNullEntry ->
+            queueAdapterMemberName(AppleMusicRuntimeMember.QUEUE_ENTRY_ITEM_FIELD)?.let {
+                    fieldName ->
+                runCatching { AppleReflection.field(nonNullEntry, fieldName) }.getOrNull()
+            }
         }
-        val metadata = item?.takeUnless { historyEntry }?.let {
-            runCatching {
-                AppleReflection.field(
-                    it,
-                    queueAdapterTarget.runtimeMemberName(
-                        AppleMusicRuntimeMember.QUEUE_ITEM_METADATA_FIELD
-                    ),
-                )
-            }.getOrNull()
+        val metadata = item?.takeUnless { historyEntry }?.let { nonNullItem ->
+            queueAdapterMemberName(AppleMusicRuntimeMember.QUEUE_ITEM_METADATA_FIELD)?.let {
+                    fieldName ->
+                runCatching { AppleReflection.field(nonNullItem, fieldName) }.getOrNull()
+            }
         }
         val contract = if (historyEntry) {
             InAppPlaybackItemContract.HISTORY
@@ -522,22 +529,20 @@ internal class AppleQueueMetadataHooks(
         val itemId = when {
             item == null -> null
             historyEntry -> host.contentItemMediaId(item, true)
-            else -> runCatching {
-                AppleReflection.field(
-                    item,
-                    queueAdapterTarget.runtimeMemberName(AppleMusicRuntimeMember.QUEUE_ITEM_ID_FIELD),
-                ) as? String
-            }.getOrNull()
+            else -> queueAdapterMemberName(AppleMusicRuntimeMember.QUEUE_ITEM_ID_FIELD)?.let {
+                    fieldName ->
+                runCatching { AppleReflection.field(item, fieldName) }.getOrNull() as? String
+            }
         }
-        val bundleId = metadata?.let {
-            runCatching {
-                (AppleReflection.field(
-                    it,
-                    queueAdapterTarget.runtimeMemberName(
-                        AppleMusicRuntimeMember.MEDIA3_METADATA_BUNDLE_FIELD
-                    ),
-                ) as? Bundle)?.getString(MEDIA3_METADATA_ID_KEY)
-            }.getOrNull()
+        val bundleId = metadata?.let { nonNullMetadata ->
+            queueAdapterMemberName(AppleMusicRuntimeMember.MEDIA3_METADATA_BUNDLE_FIELD)?.let {
+                    fieldName ->
+                runCatching {
+                    (AppleReflection.field(nonNullMetadata, fieldName) as? Bundle)?.getString(
+                        MEDIA3_METADATA_ID_KEY,
+                    )
+                }.getOrNull()
+            }
         }
         val rawTitle = playbackItemText(item, metadata, historyEntry, contract, title = true)
         val rawSubtitle = playbackItemText(item, metadata, historyEntry, contract, title = false)
@@ -591,19 +596,17 @@ internal class AppleQueueMetadataHooks(
             if (title) InAppPlaybackItemField.TITLE else InAppPlaybackItemField.ARTIST,
             contract,
         )
-        else -> metadata?.let {
-            runCatching {
-                AppleReflection.field(
-                    it,
-                    queueAdapterTarget.runtimeMemberName(
-                        if (title) {
-                            AppleMusicRuntimeMember.MEDIA3_METADATA_TITLE_FIELD
-                        } else {
-                            AppleMusicRuntimeMember.MEDIA3_METADATA_ARTIST_FIELD
-                        }
-                    ),
-                )
-            }.getOrNull()?.toString()
+        else -> metadata?.let { nonNullMetadata ->
+            queueAdapterMemberName(
+                if (title) {
+                    AppleMusicRuntimeMember.MEDIA3_METADATA_TITLE_FIELD
+                } else {
+                    AppleMusicRuntimeMember.MEDIA3_METADATA_ARTIST_FIELD
+                },
+            )?.let { fieldName ->
+                runCatching { AppleReflection.field(nonNullMetadata, fieldName) }
+                    .getOrNull()?.toString()
+            }
         }
     }
 

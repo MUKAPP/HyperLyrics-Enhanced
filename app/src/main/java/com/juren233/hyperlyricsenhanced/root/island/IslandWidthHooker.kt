@@ -230,13 +230,6 @@ internal object IslandWidthHooker {
         override fun intercept(chain: Chain): Any? {
             val result = chain.proceed()
             val candidate = runCatching {
-                if (IslandDynamicWidthLimiter.isEnabled()) {
-                    if (lastLoggedState != 2) {
-                        lastLoggedState = 2
-                        HookLogger.i(TAG, "动态上限已启用，平板自定义长度保持停用")
-                    }
-                    return@runCatching result
-                }
                 if (!IslandViewHelper.isUnlockIslandLengthEnabled()) {
                     if (lastLoggedState != 0) {
                         lastLoggedState = 0
@@ -317,13 +310,6 @@ internal object IslandWidthHooker {
         override fun intercept(chain: Chain): Any? {
             val result = chain.proceed()
             val candidate = runCatching {
-                if (IslandDynamicWidthLimiter.isEnabled()) {
-                    if (lastLoggedState != 2) {
-                        lastLoggedState = 2
-                        HookLogger.i(TAG, "动态上限已启用，手机自定义长度保持停用")
-                    }
-                    return@runCatching result
-                }
                 if (!IslandViewHelper.isUnlockIslandLengthEnabled()) {
                     if (lastLoggedState != 0) {
                         lastLoggedState = 0
