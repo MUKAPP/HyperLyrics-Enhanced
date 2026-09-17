@@ -34,8 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.juren233.hyperlyricsenhanced.BuildConfig
 import com.juren233.hyperlyricsenhanced.R
+import com.juren233.hyperlyricsenhanced.common.FeatureEntryApplier
 import com.juren233.hyperlyricsenhanced.common.FeatureEntryConfig
-import com.juren233.hyperlyricsenhanced.common.FeatureEntryGate
 import com.juren233.hyperlyricsenhanced.common.LogLevelPolicy
 import com.juren233.hyperlyricsenhanced.common.PrefsBridge
 import com.juren233.hyperlyricsenhanced.common.RootConstants
@@ -87,7 +87,7 @@ private fun setExcludeFromRecents(context: Context, exclude: Boolean) {
 }
 
 @Composable
-fun SettingsPage() {
+fun SettingsPage(scrollToFeatureSwitches: Boolean = false) {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -222,6 +222,11 @@ fun SettingsPage() {
             prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_AOD_LYRICS, xiaomiDevice)
         )
     }
+    var dynamicIslandEntryEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND, true)
+        )
+    }
     var appleMusicEntryEnabled by remember {
         mutableStateOf(
             prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_APPLE_MUSIC, appleMusicInstalled)
@@ -232,37 +237,20 @@ fun SettingsPage() {
     val toggleFeatureEntry: (String, Boolean, (Boolean) -> Unit, String?) -> Unit =
         { entryKey, enabled, onChanged, featureKey ->
             onChanged(enabled)
-            prefs.edit { putBoolean(entryKey, enabled) }
+            val writes = FeatureEntryApplier.setEntryEnabled(
+                prefs = prefs,
+                entryKey = entryKey,
+                enabled = enabled,
+                featureKey = featureKey,
+            )
             // 同步到宿主进程，入口状态改变后功能立即生效/停用。
-            PrefsBridge.putBoolean(entryKey, enabled)
-            if (featureKey != null) {
-                val stashKey = FeatureEntryGate.stashKey(featureKey)
-                val stashedValue = if (prefs.contains(stashKey)) {
-                    prefs.getBoolean(stashKey, false)
-                } else {
-                    null
-                }
-                val outcome = FeatureEntryGate.resolveOnEntryToggle(
-                    entryEnabled = enabled,
-                    currentFeatureValue = prefs.getBoolean(featureKey, false),
-                    stashedValue = stashedValue,
-                )
-                outcome.featureValue?.let { value ->
-                    prefs.edit { putBoolean(featureKey, value) }
-                    PrefsBridge.putBoolean(featureKey, value)
-                }
-                outcome.stashValue?.let { value ->
-                    prefs.edit { putBoolean(stashKey, value) }
-                }
-                if (outcome.clearStash) {
-                    prefs.edit { remove(stashKey) }
-                }
-            }
+            writes.forEach { (key, value) -> PrefsBridge.putBoolean(key, value) }
         }
-    // 主页是否保留：两个米系入口至少有一个开启。主页保留时不在设置页重复列出它的内容。
+    // 主页是否保留：三个歌词入口至少有一个开启。主页保留时不在设置页重复列出它的内容。
     val homePageVisible = MainTabPolicy.isHomePageVisible(
         superIslandEntryEnabled = superIslandEntryEnabled,
         aodLyricsEntryEnabled = aodLyricsEntryEnabled,
+        dynamicIslandEntryEnabled = dynamicIslandEntryEnabled,
     )
 
     Scaffold(
@@ -282,7 +270,18 @@ fun SettingsPage() {
             }
         }
     ) { innerPadding ->
-        val lazyListState = rememberLazyListState()
+        // “功能开关”分组前的条目数，与 settingsSections 里的 key 顺序保持一致：
+        // 主页隐藏时其迁移区块（4 项 + 通知型灵动岛 1 项）排在最前，另有个性化标题与内容 2 项。
+        val featureSwitchesItemIndex = (
+            if (!homePageVisible) {
+                4 + if (dynamicIslandEntryEnabled) 1 else 0
+            } else {
+                0
+            }
+            ) + 2
+        val lazyListState = rememberLazyListState(
+            initialFirstVisibleItemIndex = if (scrollToFeatureSwitches) featureSwitchesItemIndex else 0,
+        )
         val top = innerPadding.calculateTopPadding()
         val bottom = innerPadding.calculateBottomPadding()
         val contentPadding = remember(top, bottom) {
@@ -310,6 +309,7 @@ fun SettingsPage() {
                     },
                     lyricHookSwitches = lyricHookSwitches,
                     showMigratedHomeSections = !homePageVisible,
+                    dynamicIslandEntryEnabled = dynamicIslandEntryEnabled,
                     superIslandEntryEnabled = superIslandEntryEnabled,
                     onSuperIslandEntryToggle = { enabled ->
                         toggleFeatureEntry(
@@ -326,6 +326,14 @@ fun SettingsPage() {
                             enabled,
                             { aodLyricsEntryEnabled = it },
                             RootConstants.KEY_HOOK_ENABLE_AOD_LYRICS,
+                        )
+                    },
+                    onDynamicIslandEntryToggle = { enabled ->
+                        toggleFeatureEntry(
+                            UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND,
+                            enabled,
+                            { dynamicIslandEntryEnabled = it },
+                            RootConstants.KEY_HOOK_ENABLE_DYNAMIC_ISLAND,
                         )
                     },
                     appleMusicEntryEnabled = appleMusicEntryEnabled,
@@ -350,15 +358,18 @@ private fun LazyListScope.settingsSections(
     onExportAllLogs: () -> Unit,
     lyricHookSwitches: LyricHookSwitchController,
     showMigratedHomeSections: Boolean,
+    dynamicIslandEntryEnabled: Boolean,
     superIslandEntryEnabled: Boolean,
     onSuperIslandEntryToggle: (Boolean) -> Unit,
     aodLyricsEntryEnabled: Boolean,
     onAodLyricsEntryToggle: (Boolean) -> Unit,
+    onDynamicIslandEntryToggle: (Boolean) -> Unit,
     appleMusicEntryEnabled: Boolean,
     onAppleMusicEntryToggle: (Boolean) -> Unit,
 ) {
-    // 主页被隐藏（两个米系入口都关闭）时，主页的歌词设置、通知型灵动岛歌词与特殊功能迁到设置页顶部；
+    // 主页被隐藏（三个歌词入口都关闭）时，主页的歌词设置与特殊功能迁到设置页顶部；
     // 主页仍保留时这些内容留在主页，设置页不重复列出。
+    // 通知型灵动岛歌词卡片由 dynamicIslandEntryEnabled 单独门控：入口开启时主页必然保留，不会走到这里。
     if (showMigratedHomeSections) {
         item(key = "global_features_title") {
             SmallTitle(text = stringResource(R.string.title_global_features))
@@ -372,7 +383,7 @@ private fun LazyListScope.settingsSections(
                 )
             }
         }
-        item(key = "dynamic_island_lyrics") {
+        if (dynamicIslandEntryEnabled) item(key = "dynamic_island_lyrics") {
             val navigator = LocalNavigator.current
             Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
                 Column {
@@ -519,6 +530,11 @@ private fun LazyListScope.settingsSections(
                     title = stringResource(R.string.title_feature_entry_aod_lyrics),
                     checked = aodLyricsEntryEnabled,
                     onCheckedChange = onAodLyricsEntryToggle,
+                )
+                SwitchPreference(
+                    title = stringResource(R.string.title_feature_entry_dynamic_island),
+                    checked = dynamicIslandEntryEnabled,
+                    onCheckedChange = onDynamicIslandEntryToggle,
                 )
                 SwitchPreference(
                     title = stringResource(R.string.title_feature_entry_apple_music),

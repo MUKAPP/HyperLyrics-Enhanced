@@ -11,7 +11,7 @@ import android.content.SharedPreferences
 /**
  * “功能开关”的一次性初始化。
  *
- * 只在首次安装、以及首次升级到带功能入口的版本时执行一次：按当前设备能力写入三个入口的初始值。
+ * 只在首次安装、以及首次升级到带功能入口的版本时执行一次：按当前设备能力写入各入口的初始值。
  * 已经存在的入口键（用户手动设置过）不会被改写，所以后续版本更新不会再触发自动关闭，
  * 用户手动开启的入口会一直保留。
  *
@@ -123,6 +123,14 @@ object FeatureEntryInitializer {
             defaultEnabled = xiaomiDevice,
             featureKey = RootConstants.KEY_HOOK_ENABLE_AOD_LYRICS,
             featureDefault = RootConstants.DEFAULT_HOOK_ENABLE_AOD_LYRICS,
+        )
+        seedEntry(
+            prefs = prefs,
+            writes = writes,
+            entryKey = UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND,
+            defaultEnabled = true,
+            featureKey = RootConstants.KEY_HOOK_ENABLE_DYNAMIC_ISLAND,
+            featureDefault = RootConstants.DEFAULT_HOOK_ENABLE_DYNAMIC_ISLAND,
         )
         seedEntry(
             prefs = prefs,

@@ -21,6 +21,7 @@ object UIConstants {
     const val KEY_LAST_SEEN_VERSION = "key_last_seen_version"
     const val KEY_FEATURE_ENTRY_SUPER_ISLAND = "key_feature_entry_super_island"
     const val KEY_FEATURE_ENTRY_AOD_LYRICS = "key_feature_entry_aod_lyrics"
+    const val KEY_FEATURE_ENTRY_DYNAMIC_ISLAND = "key_feature_entry_dynamic_island"
     const val KEY_FEATURE_ENTRY_APPLE_MUSIC = "key_feature_entry_apple_music"
     /** 功能入口一次性初始化是否已执行（首次安装 / 首次升级到带入口的版本时写入）。 */
     const val KEY_FEATURE_ENTRY_INITIALIZED = "key_feature_entry_initialized"

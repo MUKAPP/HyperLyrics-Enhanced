@@ -31,7 +31,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 /**
  * 功能入口全部关闭时的引导页。
  *
- * 设备既不支持米系入口、又没有安装 Apple Music 时默认进入该页；用户仍可在此进入应用设置手动开启入口。
+ * 应用设置中“功能开关”全部关闭（且因此主页被隐藏）时进入该页；
+ * 用户仍可点击按钮进入应用设置并自动定位到“功能开关”分组手动开启入口。
  */
 @Composable
 fun UnsupportedDevicePage(

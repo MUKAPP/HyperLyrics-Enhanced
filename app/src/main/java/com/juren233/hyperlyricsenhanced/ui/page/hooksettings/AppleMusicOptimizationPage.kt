@@ -334,7 +334,8 @@ fun AppleMusicOptimizationPage(
         // 仅当本页作为主页面首页（主页被隐藏）时，标题收回顶栏后只显示应用名；
         // 主页仍在时保持原有的标题 + 副标题。
         collapsedTitle = if (collapseTitleToAppName) stringResource(R.string.app_name) else null,
-        // 内嵌在主页面时左上角提供应用设置入口。
+        // 内嵌在主页面且本页即首页（主页被隐藏）时，左上角提供应用设置入口；
+        // 主页仍在时设置入口由主页提供，这里不重复显示。
         leadingContent = if (embeddedInMainPage) {
             { AppSettingsIconButton(onClick = onAppSettingsClick) }
         } else {

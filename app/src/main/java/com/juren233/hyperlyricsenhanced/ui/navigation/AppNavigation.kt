@@ -83,7 +83,9 @@ fun AppNavigation(startRoute: Route) {
                 }
                 entry<Route.Main> { MainPage() }
                 
-                entry<Route.Settings> { SettingsPage() }
+                entry<Route.Settings> { settings ->
+                    SettingsPage(scrollToFeatureSwitches = settings.scrollToFeatureSwitches)
+                }
                 entry<Route.HookSettings> { HookSettingsPage() }
                 entry<Route.AppleMusicOptimization> { AppleMusicOptimizationPage() }
                 entry<Route.LyricProvider> { LyricProviderPage() }

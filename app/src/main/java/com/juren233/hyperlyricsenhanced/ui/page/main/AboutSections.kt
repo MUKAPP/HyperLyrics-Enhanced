@@ -21,7 +21,6 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardColors
 import top.yukonga.miuix.kmp.basic.CardDefaults
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -104,12 +103,6 @@ fun LazyListScope.aboutPageSections(
                 BasicComponent(title = aboutOsVersion, summary = stringResource(R.string.info_os_version))
             }
         }
-    }
-
-    item(key = "help_title") {
-        SmallTitle(
-            text = stringResource(R.string.title_help)
-        )
     }
 
     item(key = "help_content") {

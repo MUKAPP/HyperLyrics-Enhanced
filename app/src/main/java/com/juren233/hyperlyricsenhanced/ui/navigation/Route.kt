@@ -9,8 +9,14 @@ sealed interface Route : NavKey {
     data object Setup : Route
     @Serializable
     data object Main : Route
+
+    /**
+     * 应用设置页。
+     *
+     * @param scrollToFeatureSwitches 打开时自动定位到“功能开关”分组（不支持设备页的入口按钮使用）。
+     */
     @Serializable
-    data object Settings : Route
+    data class Settings(val scrollToFeatureSwitches: Boolean = false) : Route
     @Serializable
     data object HookSettings : Route
     @Serializable

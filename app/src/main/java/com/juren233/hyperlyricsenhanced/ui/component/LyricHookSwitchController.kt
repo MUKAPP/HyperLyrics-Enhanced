@@ -60,8 +60,8 @@ import top.yukonga.miuix.kmp.window.WindowBottomSheet
 /**
  * 歌词相关开关（通知型灵动岛歌词 + 特殊功能）的共享状态。
  *
- * 这些开关在主页与设置页都可能出现：两个米系入口至少有一个开启时留在主页，
- * 两个都关闭（主页被隐藏）时迁到设置页顶部。为保证两处读写一致，状态与副作用统一由本控制器持有。
+ * 这些开关在主页与设置页都可能出现：三个歌词入口至少有一个开启时留在主页，
+ * 全部关闭（主页被隐藏）时迁到设置页顶部。为保证两处读写一致，状态与副作用统一由本控制器持有。
  */
 @Stable
 class LyricHookSwitchController internal constructor(

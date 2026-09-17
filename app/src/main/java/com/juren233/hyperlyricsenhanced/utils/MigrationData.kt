@@ -26,6 +26,16 @@ sealed interface MigrationScope {
 object MigrationData {
     val notes = listOf(
         MigrationNote(
+            versionCode = 200000,
+            scope = MigrationScope.MinorVersion(major = 8, minor = 0),
+            items = listOf(
+                MigrationItem(
+                    text = "8.0.0更新后你需要注意的一些事",
+                    summary = "\n8.0.0 起新增功能入口开关：升级后各功能入口会按设备能力自动初始化，非小米设备的“米系超级岛歌词”“米系息屏歌词”入口会默认关闭。更新后如果找不到原有功能，可到设置的“功能开关”里重新打开对应入口即可。\n\n本次更新已完成 Apple Music 6.5.3 的适配、新增超级岛动态调节与解除限制等功能，更多内容请看更新日志。",
+                ),
+            ),
+        ),
+        MigrationNote(
             versionCode = 140000,
             scope = MigrationScope.MinorVersion(major = 7, minor = 4),
             items = listOf(

@@ -12,36 +12,39 @@ import org.junit.Test
 class MainTabPolicyTest {
 
     @Test
-    fun `keeps home and apple music pages with about when both entries are enabled`() {
+    fun `keeps home and apple music pages with about when all entries are enabled`() {
         assertEquals(
             listOf(MainTab.Home, MainTab.AppleMusic, MainTab.About),
             MainTabPolicy.tabs(
                 superIslandEntryEnabled = true,
                 aodLyricsEntryEnabled = true,
+                dynamicIslandEntryEnabled = true,
                 appleMusicEntryEnabled = true,
             ),
         )
     }
 
     @Test
-    fun `apple music becomes the first page when both xiaomi entries are disabled`() {
+    fun `apple music becomes the first page when all lyric entries are disabled`() {
         assertEquals(
             listOf(MainTab.AppleMusic, MainTab.About),
             MainTabPolicy.tabs(
                 superIslandEntryEnabled = false,
                 aodLyricsEntryEnabled = false,
+                dynamicIslandEntryEnabled = false,
                 appleMusicEntryEnabled = true,
             ),
         )
     }
 
     @Test
-    fun `keeps home page with a single xiaomi entry`() {
+    fun `keeps home page with a single lyric entry`() {
         assertEquals(
             listOf(MainTab.Home, MainTab.About),
             MainTabPolicy.tabs(
                 superIslandEntryEnabled = true,
                 aodLyricsEntryEnabled = false,
+                dynamicIslandEntryEnabled = false,
                 appleMusicEntryEnabled = false,
             ),
         )
@@ -50,30 +53,55 @@ class MainTabPolicyTest {
             MainTabPolicy.tabs(
                 superIslandEntryEnabled = false,
                 aodLyricsEntryEnabled = true,
+                dynamicIslandEntryEnabled = false,
                 appleMusicEntryEnabled = false,
             ),
         )
     }
 
     @Test
-    fun `shows only the guidance page when every entry is disabled`() {
+    fun `dynamic island entry alone keeps the home page`() {
+        assertEquals(
+            listOf(MainTab.Home, MainTab.About),
+            MainTabPolicy.tabs(
+                superIslandEntryEnabled = false,
+                aodLyricsEntryEnabled = false,
+                dynamicIslandEntryEnabled = true,
+                appleMusicEntryEnabled = false,
+            ),
+        )
+        assertEquals(
+            listOf(MainTab.Home, MainTab.AppleMusic, MainTab.About),
+            MainTabPolicy.tabs(
+                superIslandEntryEnabled = false,
+                aodLyricsEntryEnabled = false,
+                dynamicIslandEntryEnabled = true,
+                appleMusicEntryEnabled = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `shows only the guidance page when every feature switch is disabled`() {
         assertEquals(
             listOf(MainTab.Unsupported),
             MainTabPolicy.tabs(
                 superIslandEntryEnabled = false,
                 aodLyricsEntryEnabled = false,
+                dynamicIslandEntryEnabled = false,
                 appleMusicEntryEnabled = false,
             ),
         )
     }
 
     @Test
-    fun `home page stays visible while at least one xiaomi entry is enabled`() {
+    fun `home page stays visible while at least one lyric entry is enabled`() {
         assertEquals(
             true,
             MainTabPolicy.isHomePageVisible(
                 superIslandEntryEnabled = true,
                 aodLyricsEntryEnabled = true,
+                dynamicIslandEntryEnabled = true,
             ),
         )
         assertEquals(
@@ -81,6 +109,7 @@ class MainTabPolicyTest {
             MainTabPolicy.isHomePageVisible(
                 superIslandEntryEnabled = true,
                 aodLyricsEntryEnabled = false,
+                dynamicIslandEntryEnabled = false,
             ),
         )
         assertEquals(
@@ -88,17 +117,27 @@ class MainTabPolicyTest {
             MainTabPolicy.isHomePageVisible(
                 superIslandEntryEnabled = false,
                 aodLyricsEntryEnabled = true,
+                dynamicIslandEntryEnabled = false,
+            ),
+        )
+        assertEquals(
+            true,
+            MainTabPolicy.isHomePageVisible(
+                superIslandEntryEnabled = false,
+                aodLyricsEntryEnabled = false,
+                dynamicIslandEntryEnabled = true,
             ),
         )
     }
 
     @Test
-    fun `home page content only moves into settings when both xiaomi entries are disabled`() {
+    fun `home page content only moves into settings when all lyric entries are disabled`() {
         assertEquals(
             false,
             MainTabPolicy.isHomePageVisible(
                 superIslandEntryEnabled = false,
                 aodLyricsEntryEnabled = false,
+                dynamicIslandEntryEnabled = false,
             ),
         )
     }

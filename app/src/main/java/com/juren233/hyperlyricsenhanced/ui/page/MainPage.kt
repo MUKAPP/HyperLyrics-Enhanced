@@ -124,7 +124,7 @@ import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Music
-import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.interfaces.ExperimentalScrollBarApi
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
@@ -164,6 +164,11 @@ fun MainPage() {
             prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_AOD_LYRICS, xiaomiDevice)
         )
     }
+    var dynamicIslandEntryEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND, true)
+        )
+    }
     var appleMusicEntryEnabled by remember {
         mutableStateOf(
             prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_APPLE_MUSIC, appleMusicInstalled)
@@ -172,18 +177,21 @@ fun MainPage() {
     val mainTabs = remember(
         superIslandEntryEnabled,
         aodLyricsEntryEnabled,
+        dynamicIslandEntryEnabled,
         appleMusicEntryEnabled,
     ) {
         MainTabPolicy.tabs(
             superIslandEntryEnabled = superIslandEntryEnabled,
             aodLyricsEntryEnabled = aodLyricsEntryEnabled,
+            dynamicIslandEntryEnabled = dynamicIslandEntryEnabled,
             appleMusicEntryEnabled = appleMusicEntryEnabled,
         )
     }
-    // 主页是否保留：两个米系入口至少有一个开启。主页隐藏时 Apple Music 体验优化页即为首页。
+    // 主页是否保留：三个歌词入口至少有一个开启。主页隐藏时 Apple Music 体验优化页即为首页。
     val homePageVisible = MainTabPolicy.isHomePageVisible(
         superIslandEntryEnabled = superIslandEntryEnabled,
         aodLyricsEntryEnabled = aodLyricsEntryEnabled,
+        dynamicIslandEntryEnabled = dynamicIslandEntryEnabled,
     )
 
     // --- pager ---
@@ -259,6 +267,8 @@ fun MainPage() {
                     superIslandEntryEnabled = p.getBoolean(UIConstants.KEY_FEATURE_ENTRY_SUPER_ISLAND, xiaomiDevice)
                 UIConstants.KEY_FEATURE_ENTRY_AOD_LYRICS ->
                     aodLyricsEntryEnabled = p.getBoolean(UIConstants.KEY_FEATURE_ENTRY_AOD_LYRICS, xiaomiDevice)
+                UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND ->
+                    dynamicIslandEntryEnabled = p.getBoolean(UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND, true)
                 UIConstants.KEY_FEATURE_ENTRY_APPLE_MUSIC ->
                     appleMusicEntryEnabled = p.getBoolean(UIConstants.KEY_FEATURE_ENTRY_APPLE_MUSIC, appleMusicInstalled)
             }
@@ -386,7 +396,7 @@ fun MainPage() {
     val navItems = remember(mainTabs, homeLabel, appleMusicOptimizationLabel, aboutLabel) {
         mainTabs.mapNotNull { tab ->
             when (tab) {
-                MainTab.Home -> NavigationItem(homeLabel, MiuixIcons.Settings)
+                MainTab.Home -> NavigationItem(homeLabel, MiuixIcons.Tune)
                 MainTab.AppleMusic -> NavigationItem(appleMusicOptimizationLabel, MiuixIcons.Music)
                 MainTab.About -> NavigationItem(aboutLabel, MiuixIcons.Info)
                 MainTab.Unsupported -> null
@@ -626,6 +636,7 @@ fun MainPage() {
                             availableUpdateVersion = availableUpdate?.displayVersion,
                             showSuperIslandEntry = superIslandEntryEnabled,
                             showAodLyricsEntry = aodLyricsEntryEnabled,
+                            showDynamicIslandEntry = dynamicIslandEntryEnabled,
                             lyricHookSwitches = lyricHookSwitches,
                             enableSuperIsland = enableSuperIsland,
                             onSuperIslandToggle = toggleSuperIsland,
@@ -638,18 +649,19 @@ fun MainPage() {
                             onLockScreenAodConfigClick = { navigator.navigate(Route.LockScreenAodSettings) },
                             onClassicAodConfigClick = { navigator.navigate(Route.ClassicAodSettings) },
                             onRefreshClick = onOneTapRefreshClick,
-                            onAppSettingsClick = { navigator.navigate(Route.Settings) },
+                            onAppSettingsClick = { navigator.navigate(Route.Settings()) },
                         )
                         MainTab.AppleMusic -> AppleMusicOptimizationPage(
                             outerPadding = innerPadding,
                             showNavigationIcon = false,
-                            embeddedInMainPage = true,
+                            // 主页仍在时左上角设置入口由主页提供，本页不重复显示；主页隐藏（本页即首页）时才显示。
+                            embeddedInMainPage = !homePageVisible,
                             // 主页仍在时保持本页原有的标题 + 副标题，只有主页被隐藏（本页即首页）时才收起为应用名。
                             collapseTitleToAppName = !homePageVisible,
                             // 主页隐藏时本页即首页，顶栏右侧同样提供一键刷新入口。
                             showRefreshAction = !homePageVisible,
                             onRefreshClick = onOneTapRefreshClick,
-                            onAppSettingsClick = { navigator.navigate(Route.Settings) },
+                            onAppSettingsClick = { navigator.navigate(Route.Settings()) },
                         )
                         MainTab.About -> AboutPage(
                             outerPadding = innerPadding,
@@ -670,7 +682,7 @@ fun MainPage() {
                             },
                         )
                         MainTab.Unsupported -> UnsupportedDevicePage(
-                            onEnterAppSettings = { navigator.navigate(Route.Settings) },
+                            onEnterAppSettings = { navigator.navigate(Route.Settings(scrollToFeatureSwitches = true)) },
                         )
                         null -> Unit
                     }

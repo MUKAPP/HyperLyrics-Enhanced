@@ -1,8 +1,13 @@
 package com.juren233.hyperlyricsenhanced.ui.page
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -38,10 +43,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import com.juren233.hyperlyricsenhanced.BuildConfig
 import com.juren233.hyperlyricsenhanced.R
+import com.juren233.hyperlyricsenhanced.common.FeatureEntryApplier
+import com.juren233.hyperlyricsenhanced.common.InstalledAppsPermission
+import com.juren233.hyperlyricsenhanced.common.PrefsBridge
 import com.juren233.hyperlyricsenhanced.common.RootConstants
+import com.juren233.hyperlyricsenhanced.utils.LogManager
 import com.juren233.hyperlyricsenhanced.common.UIConstants
 import com.juren233.hyperlyricsenhanced.lyric.ConfigRepository
 import com.juren233.hyperlyricsenhanced.lyric.commonMusicApps
@@ -79,11 +90,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlin.time.Duration.Companion.milliseconds
 
+/** 工作模式：米系超级岛歌词（Hook 系统界面）。 */
+private const val SETUP_MODE_MI_SUPER_ISLAND = 0
+
+/** 工作模式：通知型灵动岛歌词（通知监听，无需 root）。 */
+private const val SETUP_MODE_DYNAMIC_ISLAND = 1
+
+/** 工作模式：非米系设备，仅使用 Apple Music 体验优化，其余功能入口隐藏并禁用。 */
+private const val SETUP_MODE_APPLE_MUSIC_ONLY = 2
+
 @Composable
 fun SetupPage(onNavigateToMain: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(pageCount = { 4 })
     val prefs = remember { context.getSharedPreferences(UIConstants.PREF_NAME, Context.MODE_PRIVATE) }
     val snackbarHostState = remember { SnackbarHostState() }
     val msgXposedNotActive = stringResource(R.string.toast_xposed_module_not_active)
@@ -97,9 +116,59 @@ fun SetupPage(onNavigateToMain: () -> Unit) {
         mutableStateOf(prefs.getString(RootConstants.KEY_HOOK_LYRIC_SOURCE, RootConstants.DEFAULT_HOOK_LYRIC_SOURCE) ?: "lyricon")
     }
 
+    // --- 授权状态：“授予必要权限”页要求全部授权完成后才能进入下一步 ---
+    val installedAppsPermission = remember(context) { InstalledAppsPermission.resolve(context) }
+    var isNotificationListenerGranted by remember { mutableStateOf(false) }
+    var isPostNotificationGranted by remember { mutableStateOf(false) }
+    var isAppListGranted by remember {
+        mutableStateOf(InstalledAppsPermission.isGranted(context, installedAppsPermission))
+    }
+    val appListPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) {
+        isAppListGranted = InstalledAppsPermission.isGranted(context, installedAppsPermission)
+    }
+    val requestAppListPermission: () -> Unit = {
+        // 非米系系统上没有该权限（resolve 为 null），无需任何操作。
+        if (installedAppsPermission != null) {
+            appListPermissionLauncher.launch(installedAppsPermission)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            isNotificationListenerGranted = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+            isPostNotificationGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            isAppListGranted = InstalledAppsPermission.isGranted(context, installedAppsPermission)
+            delay(1000.milliseconds)
+        }
+    }
+
     val onFinish = {
         prefs.edit { putBoolean(UIConstants.KEY_SETUP_COMPLETED, true) }
         onNavigateToMain()
+    }
+
+    // 页数随工作模式变化：
+    // 米系超级岛歌词：模式选择 → 免责声明 → 授予必要权限 → 歌词源 → 完成；
+    // 通知型灵动岛歌词：模式选择 → 授予必要权限 → 音乐App白名单 → 完成；
+    // 仅 Apple Music：模式选择 → 授予必要权限 → 完成。
+    val pageCount = when (workMode) {
+        SETUP_MODE_MI_SUPER_ISLAND -> 5
+        SETUP_MODE_DYNAMIC_ISLAND -> 4
+        else -> 3
+    }
+    val pagerState = rememberPagerState(pageCount = { pageCount })
+
+    // 授权页要求全部权限授予后才能下一步；未完成授权时“下一步”保持禁用。
+    val onPermissionPage = when (workMode) {
+        SETUP_MODE_MI_SUPER_ISLAND -> pagerState.currentPage == 2
+        SETUP_MODE_DYNAMIC_ISLAND, SETUP_MODE_APPLE_MUSIC_ONLY -> pagerState.currentPage == 1
+        else -> false
+    }
+    val permissionPageCompleted = when (workMode) {
+        SETUP_MODE_DYNAMIC_ISLAND -> isNotificationListenerGranted && isPostNotificationGranted && isAppListGranted
+        else -> isAppListGranted
     }
 
     Scaffold(
@@ -128,15 +197,19 @@ fun SetupPage(onNavigateToMain: () -> Unit) {
                     Spacer(modifier = Modifier.width(12.dp))
                 }
 
-                val isLastPage = pagerState.currentPage == 3
+                val isLastPage = pagerState.currentPage == pagerState.pageCount - 1
 
                 TextButton(
                     text = if (isLastPage) stringResource(R.string.confirm) else stringResource(R.string.next),
                     colors = ButtonDefaults.textButtonColorsPrimary(),
+                    enabled = !onPermissionPage || permissionPageCompleted,
                     onClick = {
                         if (isLastPage) {
                             onFinish()
-                        } else if (pagerState.currentPage == 0 && workMode == 0 && RootApplication.xposedService == null) {
+                        } else if (pagerState.currentPage == 0 &&
+                            workMode == SETUP_MODE_MI_SUPER_ISLAND &&
+                            RootApplication.xposedService == null
+                        ) {
                             scope.launch {
                                 snackbarHostState.showSnackbar(
                                     message = msgXposedNotActive,
@@ -144,6 +217,12 @@ fun SetupPage(onNavigateToMain: () -> Unit) {
                                 )
                             }
                         } else {
+                            if (pagerState.currentPage == 0) {
+                                // 模式 0 默认处于选中态，用户可能未点按卡片直接下一步：
+                                // 前进时统一持久化选择并落定入口联动，保证“选择米系超级岛歌词”一定生效。
+                                prefs.edit { putInt(UIConstants.KEY_WORK_MODE, workMode) }
+                                applySetupModeEntrySideEffects(prefs, workMode)
+                            }
                             scope.launch {
                                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
                             }
@@ -164,30 +243,103 @@ fun SetupPage(onNavigateToMain: () -> Unit) {
             when (page) {
                 0 -> ModeSelectionPage(
                     selectedMode = workMode,
-                    onModeSelected = {
-                        workMode = it
-                        prefs.edit { putInt(UIConstants.KEY_WORK_MODE, it) }
+                    onModeSelected = { mode ->
+                        workMode = mode
+                        prefs.edit { putInt(UIConstants.KEY_WORK_MODE, mode) }
+                        applySetupModeEntrySideEffects(prefs, mode)
                     }
                 )
-                1 -> if (workMode == 0) DisclaimerPage() else PermissionPage()
-                2 -> if (workMode == 0) LyricSourceSelectionPage(
+                1 -> when (workMode) {
+                    SETUP_MODE_MI_SUPER_ISLAND -> DisclaimerPage()
+                    SETUP_MODE_DYNAMIC_ISLAND -> PermissionPage(
+                        isNotificationGranted = isNotificationListenerGranted,
+                        isPostNotificationGranted = isPostNotificationGranted,
+                        isAppListGranted = isAppListGranted,
+                        onRequestAppListPermission = requestAppListPermission,
+                    )
+                    else -> AppListPermissionPage(
+                        isAppListGranted = isAppListGranted,
+                        onRequestAppListPermission = requestAppListPermission,
+                    )
+                }
+                2 -> when (workMode) {
+                    SETUP_MODE_MI_SUPER_ISLAND -> AppListPermissionPage(
+                        isAppListGranted = isAppListGranted,
+                        onRequestAppListPermission = requestAppListPermission,
+                    )
+                    SETUP_MODE_DYNAMIC_ISLAND -> WhitelistPage()
+                    else -> CompletionPage(appleMusicOnly = true)
+                }
+                3 -> if (workMode == SETUP_MODE_MI_SUPER_ISLAND) LyricSourceSelectionPage(
                     selectedSource = selectedSource,
                     snackbarHostState = snackbarHostState,
                     onSourceSelected = { source ->
                         selectedSource = source
                         prefs.edit { putString(RootConstants.KEY_HOOK_LYRIC_SOURCE, source) }
                     }
-                ) else WhitelistPage()
-                3 -> CompletionPage()
+                ) else CompletionPage()
+                else -> CompletionPage()
             }
         }
     }
 }
 
+/**
+ * 引导页选择工作模式后，按选择落定对应功能入口的开关状态。
+ *
+ * 关闭入口沿用“功能开关”的停用规则：功能自身开关置为停用，关闭前的值被暂存，
+ * 重新打开入口后原样恢复。选择“通知型灵动岛歌词”时会把该入口恢复为开启，
+ * 解除此前选择“米系超级岛歌词”等留下的关闭，保证后续流程正常。
+ * 写入同步到宿主进程，退出引导后立即生效。
+ */
+private fun applySetupModeEntrySideEffects(prefs: SharedPreferences, mode: Int) {
+    val entryClosures = when (mode) {
+        // 米系超级岛歌词：通知型灵动岛歌词入口关闭并禁用。
+        SETUP_MODE_MI_SUPER_ISLAND -> listOf(
+            UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND to RootConstants.KEY_HOOK_ENABLE_DYNAMIC_ISLAND,
+        )
+        // 仅 Apple Music：其余功能入口隐藏并禁用。
+        SETUP_MODE_APPLE_MUSIC_ONLY -> listOf(
+            UIConstants.KEY_FEATURE_ENTRY_SUPER_ISLAND to RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
+            UIConstants.KEY_FEATURE_ENTRY_AOD_LYRICS to RootConstants.KEY_HOOK_ENABLE_AOD_LYRICS,
+            UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND to RootConstants.KEY_HOOK_ENABLE_DYNAMIC_ISLAND,
+        )
+        else -> emptyList()
+    }
+    // 选择通知型灵动岛歌词：恢复正常流程，解除此前选择对该入口的关闭（暂存的原值随之恢复）。
+    val entryReopens = if (mode == SETUP_MODE_DYNAMIC_ISLAND) listOf(
+        UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND to RootConstants.KEY_HOOK_ENABLE_DYNAMIC_ISLAND,
+    ) else {
+        emptyList()
+    }
+    if (BuildConfig.DEBUG) {
+        LogManager.i(
+            "SetupPage",
+            "apply_mode_entry_effects mode=$mode close=${entryClosures.map { it.first }} reopen=${entryReopens.map { it.first }}",
+        )
+    }
+    entryReopens.forEach { (entryKey, featureKey) ->
+        val writes = FeatureEntryApplier.setEntryEnabled(
+            prefs = prefs,
+            entryKey = entryKey,
+            enabled = true,
+            featureKey = featureKey,
+        )
+        writes.forEach { (key, value) -> PrefsBridge.putBoolean(key, value) }
+    }
+    entryClosures.forEach { (entryKey, featureKey) ->
+        val writes = FeatureEntryApplier.setEntryEnabled(
+            prefs = prefs,
+            entryKey = entryKey,
+            enabled = false,
+            featureKey = featureKey,
+        )
+        writes.forEach { (key, value) -> PrefsBridge.putBoolean(key, value) }
+    }
+}
+
 @Composable
 fun ModeSelectionPage(selectedMode: Int, onModeSelected: (Int) -> Unit) {
-    val isModuleActive = RootApplication.xposedService != null
-
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 20.dp),
@@ -203,70 +355,72 @@ fun ModeSelectionPage(selectedMode: Int, onModeSelected: (Int) -> Unit) {
             )
         }
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { onModeSelected(0) },
-                pressFeedbackType = PressFeedbackType.Tilt,
-                colors = CardDefaults.defaultColors(
-                    color = if (selectedMode == 0) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainer
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.title_super_island_lyrics),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (selectedMode == 0) Color.White else MiuixTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = stringResource(R.string.summary_super_island_lyrics),
-                        fontSize = 14.sp,
-                        color = if (selectedMode == 0) Color.White.copy(alpha = 0.8f) else MiuixTheme.colorScheme.onSurfaceSecondary,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            }
+            SetupModeCard(
+                title = stringResource(R.string.setup_mode_mi_super_island_title),
+                summary = stringResource(R.string.setup_mode_mi_super_island_summary),
+                selected = selectedMode == SETUP_MODE_MI_SUPER_ISLAND,
+                onClick = { onModeSelected(SETUP_MODE_MI_SUPER_ISLAND) },
+            )
         }
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { onModeSelected(1) },
-                pressFeedbackType = PressFeedbackType.Tilt,
-                colors = CardDefaults.defaultColors(
-                    color = if (selectedMode == 1) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainer
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.title_dynamic_island_lyrics),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (selectedMode == 1) Color.White else MiuixTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = stringResource(R.string.summary_dynamic_island_lyrics),
-                        fontSize = 14.sp,
-                        color = if (selectedMode == 1) Color.White.copy(alpha = 0.8f) else MiuixTheme.colorScheme.onSurfaceSecondary,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            }
+            SetupModeCard(
+                title = stringResource(R.string.title_dynamic_island_lyrics),
+                summary = stringResource(R.string.summary_dynamic_island_lyrics),
+                selected = selectedMode == SETUP_MODE_DYNAMIC_ISLAND,
+                onClick = { onModeSelected(SETUP_MODE_DYNAMIC_ISLAND) },
+            )
+        }
+        item {
+            SetupModeCard(
+                title = stringResource(R.string.setup_mode_apple_music_only_title),
+                summary = stringResource(R.string.setup_mode_apple_music_only_summary),
+                selected = selectedMode == SETUP_MODE_APPLE_MUSIC_ONLY,
+                onClick = { onModeSelected(SETUP_MODE_APPLE_MUSIC_ONLY) },
+            )
         }
     }
 }
 
 @Composable
-fun PermissionPage() {
-    val context = LocalContext.current
-
-    val isNotificationGranted = remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        while (isActive) {
-            isNotificationGranted.value = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
-            delay(1000.milliseconds)
+private fun SetupModeCard(
+    title: String,
+    summary: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+        pressFeedbackType = PressFeedbackType.Tilt,
+        colors = CardDefaults.defaultColors(
+            color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = title,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (selected) Color.White else MiuixTheme.colorScheme.onSurface
+            )
+            Text(
+                text = summary,
+                fontSize = 14.sp,
+                color = if (selected) Color.White.copy(alpha = 0.8f) else MiuixTheme.colorScheme.onSurfaceSecondary,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
     }
+}
+
+@Composable
+fun PermissionPage(
+    isNotificationGranted: Boolean,
+    isPostNotificationGranted: Boolean,
+    isAppListGranted: Boolean,
+    onRequestAppListPermission: () -> Unit,
+) {
+    val context = LocalContext.current
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -288,14 +442,14 @@ fun PermissionPage() {
                 Column {
                     ArrowPreference(
                         title = stringResource(R.string.title_permission_listener),
-                        summary = if (isNotificationGranted.value) stringResource(R.string.toast_permission_granted) else stringResource(R.string.summary_permission_listener),
+                        summary = if (isNotificationGranted) stringResource(R.string.toast_permission_granted) else stringResource(R.string.summary_permission_listener),
                         onClick = {
                             context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                         }
                     )
                     ArrowPreference(
                         title = stringResource(R.string.title_permission_post_notification),
-                        summary = stringResource(R.string.summary_permission_post_notification),
+                        summary = if (isPostNotificationGranted) stringResource(R.string.toast_permission_granted) else stringResource(R.string.summary_permission_post_notification),
                         onClick = {
                             val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                                 putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
@@ -303,7 +457,55 @@ fun PermissionPage() {
                             context.startActivity(intent)
                         }
                     )
+                    ArrowPreference(
+                        title = stringResource(R.string.title_permission_app_list),
+                        summary = if (isAppListGranted) {
+                            stringResource(R.string.toast_app_list_permission_granted)
+                        } else {
+                            stringResource(R.string.summary_permission_app_list)
+                        },
+                        onClick = onRequestAppListPermission
+                    )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * “授予必要权限”页（米系超级岛歌词与仅 Apple Music 模式）：只需获取应用列表权限，
+ * 仅用于模块本地识别音乐App。
+ */
+@Composable
+fun AppListPermissionPage(
+    isAppListGranted: Boolean,
+    onRequestAppListPermission: () -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text(
+                text = stringResource(R.string.title_grant_permissions),
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(vertical = 20.dp)
+            )
+        }
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                ArrowPreference(
+                    title = stringResource(R.string.title_permission_app_list),
+                    summary = if (isAppListGranted) {
+                        stringResource(R.string.toast_app_list_permission_granted)
+                    } else {
+                        stringResource(R.string.summary_permission_app_list)
+                    },
+                    onClick = onRequestAppListPermission
+                )
             }
         }
     }
@@ -623,7 +825,7 @@ fun LyricSourceSelectionPage(
 }
 
 @Composable
-fun CompletionPage() {
+fun CompletionPage(appleMusicOnly: Boolean = false) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 20.dp),
@@ -646,7 +848,10 @@ fun CompletionPage() {
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = stringResource(R.string.setup_completion_restart_hint),
+                    text = stringResource(
+                        if (appleMusicOnly) R.string.setup_completion_apple_music_only
+                        else R.string.setup_completion_restart_hint
+                    ),
                     fontSize = 14.sp,
                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     modifier = Modifier.padding(horizontal = 16.dp),

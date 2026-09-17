@@ -43,10 +43,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.focusProperties
-import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.content.edit
 import com.juren233.hyperlyricsenhanced.R
+import com.juren233.hyperlyricsenhanced.common.InstalledAppsPermission
 import com.juren233.hyperlyricsenhanced.common.IslandAlbumCoverWhitelist
 import com.juren233.hyperlyricsenhanced.common.IslandMusicAppCatalog
 import com.juren233.hyperlyricsenhanced.common.PrefsBridge
@@ -67,8 +67,6 @@ import top.yukonga.miuix.kmp.icon.extended.Music
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-private const val GET_INSTALLED_APPS_PERMISSION = "com.android.permission.GET_INSTALLED_APPS"
-private const val MIUI_SECURITY_PACKAGE = "com.lbe.security.miui"
 private const val APP_ICON_BITMAP_SIZE_PX = 96
 
 @Composable
@@ -76,15 +74,11 @@ fun SuperIslandAlbumCoverWhitelistPage() {
     val context = LocalContext.current
     val prefs = rememberHookPrefs()
     val installedAppsPermission = remember(context) {
-        resolveInstalledAppsPermission(context)
+        InstalledAppsPermission.resolve(context)
     }
     var hasInstalledAppsPermission by remember(context, installedAppsPermission) {
         mutableStateOf(
-            installedAppsPermission == null ||
-                ContextCompat.checkSelfPermission(
-                    context,
-                    installedAppsPermission,
-                ) == PackageManager.PERMISSION_GRANTED,
+            InstalledAppsPermission.isGranted(context, installedAppsPermission),
         )
     }
     var searchQuery by remember { mutableStateOf("") }
@@ -96,16 +90,12 @@ fun SuperIslandAlbumCoverWhitelistPage() {
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
         hasInstalledAppsPermission = granted ||
-            installedAppsPermission == null ||
-            ContextCompat.checkSelfPermission(
-                context,
-                installedAppsPermission,
-            ) == PackageManager.PERMISSION_GRANTED
+            InstalledAppsPermission.isGranted(context, installedAppsPermission)
     }
 
     LaunchedEffect(installedAppsPermission) {
         val permission = installedAppsPermission ?: return@LaunchedEffect
-        if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
+        if (!InstalledAppsPermission.isGranted(context, permission)) {
             permissionLauncher.launch(permission)
         }
     }
@@ -164,14 +154,6 @@ fun SuperIslandAlbumCoverWhitelistPage() {
         )
     }
 }
-
-private fun resolveInstalledAppsPermission(context: Context): String? =
-    runCatching {
-        context.packageManager
-            .getPermissionInfo(GET_INSTALLED_APPS_PERMISSION, 0)
-            .takeIf { it.packageName == MIUI_SECURITY_PACKAGE }
-            ?.name
-    }.getOrNull()
 
 @Composable
 private fun AppSearchField(

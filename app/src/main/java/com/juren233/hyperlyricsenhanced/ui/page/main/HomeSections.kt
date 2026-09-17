@@ -20,6 +20,7 @@ fun LazyListScope.homePageSections(
     availableUpdateVersion: String?,
     showSuperIslandEntry: Boolean,
     showAodLyricsEntry: Boolean,
+    showDynamicIslandEntry: Boolean,
     lyricHookSwitches: LyricHookSwitchController,
     enableSuperIsland: Boolean,
     onSuperIslandToggle: (Boolean) -> Unit,
@@ -104,7 +105,7 @@ fun LazyListScope.homePageSections(
         }
     }
 
-    item(key = "basic_features_content_dynamic_island") {
+    if (showDynamicIslandEntry) item(key = "basic_features_content_dynamic_island") {
         Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
             Column {
                 SwitchPreference(
