@@ -335,8 +335,8 @@ fun SuperIslandSettingsPage() {
             BlurredBar(backdrop, blurActive) {
                 TopAppBar(
                     color = barColor,
-                    title = stringResource(id = R.string.title_super_island),
-                    subtitle = stringResource(id = R.string.subtitle_super_island),
+                    title = stringResource(id = R.string.title_hyper_island),
+                    subtitle = stringResource(id = R.string.subtitle_hyper_island),
                     scrollBehavior = topAppBarScrollBehavior,
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) { Icon(imageVector = MiuixIcons.Back, contentDescription = stringResource(id = R.string.back)) }
@@ -584,7 +584,7 @@ fun SuperIslandSettingsPage() {
                         Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
                             Column {
                                 OverlayDropdownPreference(
-                                    title = stringResource(id = R.string.title_super_island_left),
+                                    title = stringResource(id = R.string.title_hyper_island_left),
                                     items = contentOptions,
                                     selectedIndex = islandContentLeft,
                                     onSelectedIndexChange = {
@@ -595,7 +595,7 @@ fun SuperIslandSettingsPage() {
                                     }
                                 )
                                 OverlayDropdownPreference(
-                                    title = stringResource(id = R.string.title_super_island_right),
+                                    title = stringResource(id = R.string.title_hyper_island_right),
                                     items = contentOptions,
                                     selectedIndex = islandContentRight,
                                     onSelectedIndexChange = {

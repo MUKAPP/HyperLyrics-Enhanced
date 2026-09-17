@@ -81,7 +81,7 @@ class HookEntry : XposedModule() {
         var instance: HookEntry? = null
             private set
 
-        private val SUPER_ISLAND_RUNTIME_REFRESH_KEYS = setOf(
+        private val HYPER_ISLAND_RUNTIME_REFRESH_KEYS = setOf(
             RootConstants.KEY_HOOK_ISLAND_CONTENT_LEFT,
             RootConstants.KEY_HOOK_ISLAND_CONTENT_RIGHT,
             RootConstants.KEY_HOOK_ISLAND_LEFT_PADDING_LEFT,
@@ -147,7 +147,7 @@ class HookEntry : XposedModule() {
             RootConstants.KEY_HOOK_WORD_MOTION_CJK_WAVE,
             RootConstants.KEY_HOOK_WORD_MOTION_LATIN_LIFT,
             RootConstants.KEY_HOOK_WORD_MOTION_LATIN_WAVE,
-            RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND
+            RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND
         )
     }
 
@@ -528,7 +528,7 @@ class HookEntry : XposedModule() {
                             BaseIslandRenderer.refreshActiveIsland()
                         }
                     }
-                    RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
+                    RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND,
                     RootConstants.KEY_HOOK_ENABLE_AOD_LYRICS,
                     RootConstants.KEY_HOOK_APPLE_MUSIC_NATIVE_ONLINE_TRANSLATION -> {
                         android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -669,7 +669,7 @@ class HookEntry : XposedModule() {
                             BaseIslandRenderer.refreshDynamicWidth()
                         }
                     }
-                    in SUPER_ISLAND_RUNTIME_REFRESH_KEYS -> {
+                    in HYPER_ISLAND_RUNTIME_REFRESH_KEYS -> {
                         android.os.Handler(android.os.Looper.getMainLooper()).post {
                             BaseIslandRenderer.refreshActiveIsland()
                         }

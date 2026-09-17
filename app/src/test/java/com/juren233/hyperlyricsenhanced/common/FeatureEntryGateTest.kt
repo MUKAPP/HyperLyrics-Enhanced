@@ -68,8 +68,8 @@ class FeatureEntryGateTest {
     @Test
     fun `stash key is scoped by the feature key`() {
         assertEquals(
-            UIConstants.KEY_FEATURE_ENTRY_STASH_PREFIX + RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-            FeatureEntryGate.stashKey(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND),
+            UIConstants.KEY_FEATURE_ENTRY_STASH_PREFIX + RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND,
+            FeatureEntryGate.stashKey(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND),
         )
     }
 }

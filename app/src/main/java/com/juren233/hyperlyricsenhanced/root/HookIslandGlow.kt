@@ -79,7 +79,7 @@ object HookIslandGlow {
     private fun prepareHighlightColor(view: View?, islandData: Any?): String? {
         return runCatching {
             val sharedPrefs = prefs ?: return@runCatching null
-            if (!sharedPrefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND)) {
+            if (!sharedPrefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_HYPER_ISLAND)) {
                 return@runCatching null
             }
             val colorMode = IslandRuntimePreferenceReader.getProgressColorMode(sharedPrefs)

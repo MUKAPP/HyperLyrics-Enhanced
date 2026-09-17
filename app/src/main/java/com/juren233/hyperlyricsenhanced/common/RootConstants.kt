@@ -28,7 +28,7 @@ object RootConstants {
         "debug_apple_pronunciation_diagnostic"
 
     // ================= HOOK & SUPER ISLAND KEYS =================
-    const val KEY_HOOK_ENABLE_SUPER_ISLAND = "key_hook_enable_super_island"
+    const val KEY_HOOK_ENABLE_HYPER_ISLAND = "key_hook_enable_hyper_island"
     const val KEY_HOOK_ENABLE_DYNAMIC_ISLAND = "key_hook_enable_dynamic_island"
     const val KEY_HOOK_ENABLE_AOD_LYRICS = "key_hook_enable_aod_lyrics"
     const val KEY_HOOK_LOCK_SCREEN_AOD_MAIN_TEXT_SIZE =
@@ -388,7 +388,7 @@ object RootConstants {
     const val MIN_HOOK_LYRICON_PROVIDER_DELAY = -5000
     const val MAX_HOOK_LYRICON_PROVIDER_DELAY = 5000
 
-    const val DEFAULT_HOOK_ENABLE_SUPER_ISLAND = false
+    const val DEFAULT_HOOK_ENABLE_HYPER_ISLAND = false
     const val DEFAULT_HOOK_ENABLE_DYNAMIC_ISLAND = false
     const val DEFAULT_HOOK_ENABLE_AOD_LYRICS = false
     const val AOD_SONG_INFO_FORMAT_NONE = 0

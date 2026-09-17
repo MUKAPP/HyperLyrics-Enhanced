@@ -91,7 +91,7 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlin.time.Duration.Companion.milliseconds
 
 /** 工作模式：米系超级岛歌词（Hook 系统界面）。 */
-private const val SETUP_MODE_MI_SUPER_ISLAND = 0
+private const val SETUP_MODE_MI_HYPER_ISLAND = 0
 
 /** 工作模式：通知型灵动岛歌词（通知监听，无需 root）。 */
 private const val SETUP_MODE_DYNAMIC_ISLAND = 1
@@ -154,7 +154,7 @@ fun SetupPage(onNavigateToMain: () -> Unit) {
     // 通知型灵动岛歌词：模式选择 → 授予必要权限 → 音乐App白名单 → 完成；
     // 仅 Apple Music：模式选择 → 授予必要权限 → 完成。
     val pageCount = when (workMode) {
-        SETUP_MODE_MI_SUPER_ISLAND -> 5
+        SETUP_MODE_MI_HYPER_ISLAND -> 5
         SETUP_MODE_DYNAMIC_ISLAND -> 4
         else -> 3
     }
@@ -162,7 +162,7 @@ fun SetupPage(onNavigateToMain: () -> Unit) {
 
     // 授权页要求全部权限授予后才能下一步；未完成授权时“下一步”保持禁用。
     val onPermissionPage = when (workMode) {
-        SETUP_MODE_MI_SUPER_ISLAND -> pagerState.currentPage == 2
+        SETUP_MODE_MI_HYPER_ISLAND -> pagerState.currentPage == 2
         SETUP_MODE_DYNAMIC_ISLAND, SETUP_MODE_APPLE_MUSIC_ONLY -> pagerState.currentPage == 1
         else -> false
     }
@@ -207,7 +207,7 @@ fun SetupPage(onNavigateToMain: () -> Unit) {
                         if (isLastPage) {
                             onFinish()
                         } else if (pagerState.currentPage == 0 &&
-                            workMode == SETUP_MODE_MI_SUPER_ISLAND &&
+                            workMode == SETUP_MODE_MI_HYPER_ISLAND &&
                             RootApplication.xposedService == null
                         ) {
                             scope.launch {
@@ -250,7 +250,7 @@ fun SetupPage(onNavigateToMain: () -> Unit) {
                     }
                 )
                 1 -> when (workMode) {
-                    SETUP_MODE_MI_SUPER_ISLAND -> DisclaimerPage()
+                    SETUP_MODE_MI_HYPER_ISLAND -> DisclaimerPage()
                     SETUP_MODE_DYNAMIC_ISLAND -> PermissionPage(
                         isNotificationGranted = isNotificationListenerGranted,
                         isPostNotificationGranted = isPostNotificationGranted,
@@ -263,14 +263,14 @@ fun SetupPage(onNavigateToMain: () -> Unit) {
                     )
                 }
                 2 -> when (workMode) {
-                    SETUP_MODE_MI_SUPER_ISLAND -> AppListPermissionPage(
+                    SETUP_MODE_MI_HYPER_ISLAND -> AppListPermissionPage(
                         isAppListGranted = isAppListGranted,
                         onRequestAppListPermission = requestAppListPermission,
                     )
                     SETUP_MODE_DYNAMIC_ISLAND -> WhitelistPage()
                     else -> CompletionPage(appleMusicOnly = true)
                 }
-                3 -> if (workMode == SETUP_MODE_MI_SUPER_ISLAND) LyricSourceSelectionPage(
+                3 -> if (workMode == SETUP_MODE_MI_HYPER_ISLAND) LyricSourceSelectionPage(
                     selectedSource = selectedSource,
                     snackbarHostState = snackbarHostState,
                     onSourceSelected = { source ->
@@ -295,12 +295,12 @@ fun SetupPage(onNavigateToMain: () -> Unit) {
 private fun applySetupModeEntrySideEffects(prefs: SharedPreferences, mode: Int) {
     val entryClosures = when (mode) {
         // 米系超级岛歌词：通知型灵动岛歌词入口关闭并禁用。
-        SETUP_MODE_MI_SUPER_ISLAND -> listOf(
+        SETUP_MODE_MI_HYPER_ISLAND -> listOf(
             UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND to RootConstants.KEY_HOOK_ENABLE_DYNAMIC_ISLAND,
         )
         // 仅 Apple Music：其余功能入口隐藏并禁用。
         SETUP_MODE_APPLE_MUSIC_ONLY -> listOf(
-            UIConstants.KEY_FEATURE_ENTRY_SUPER_ISLAND to RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
+            UIConstants.KEY_FEATURE_ENTRY_HYPER_ISLAND to RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND,
             UIConstants.KEY_FEATURE_ENTRY_AOD_LYRICS to RootConstants.KEY_HOOK_ENABLE_AOD_LYRICS,
             UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND to RootConstants.KEY_HOOK_ENABLE_DYNAMIC_ISLAND,
         )
@@ -356,10 +356,10 @@ fun ModeSelectionPage(selectedMode: Int, onModeSelected: (Int) -> Unit) {
         }
         item {
             SetupModeCard(
-                title = stringResource(R.string.setup_mode_mi_super_island_title),
-                summary = stringResource(R.string.setup_mode_mi_super_island_summary),
-                selected = selectedMode == SETUP_MODE_MI_SUPER_ISLAND,
-                onClick = { onModeSelected(SETUP_MODE_MI_SUPER_ISLAND) },
+                title = stringResource(R.string.setup_mode_mi_hyper_island_title),
+                summary = stringResource(R.string.setup_mode_mi_hyper_island_summary),
+                selected = selectedMode == SETUP_MODE_MI_HYPER_ISLAND,
+                onClick = { onModeSelected(SETUP_MODE_MI_HYPER_ISLAND) },
             )
         }
         item {

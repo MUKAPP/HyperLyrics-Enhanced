@@ -126,6 +126,27 @@ class ChangelogDataTest {
     }
 
     @Test
+    fun `bilingual download heading is hidden in app changelog`() {
+        val content = ChangelogData.normalizeReleaseContent(
+            """
+                feat: 新增双语发布说明
+
+                正文
+
+                ## 下载说明 / Download Instructions
+
+                日常使用请选择 **Release** 包；**Debug** 包仅用于调试和查找问题。
+                For daily use, choose the **Release** build; the **Debug** build is only for debugging and troubleshooting.
+            """.trimIndent()
+        )
+
+        assertEquals("feat: 新增双语发布说明", content.title)
+        assertEquals("正文", content.summary)
+        assertFalse(content.summary.contains("下载说明"))
+        assertFalse(content.summary.contains("Release"))
+    }
+
+    @Test
     fun `download section ends at the next sibling heading`() {
         val content = ChangelogData.normalizeReleaseContent(
             """

@@ -10,7 +10,7 @@
 
 <p align="center">
   <strong>Lyrics, wherever your music takes you.</strong><br />
-  Apple Music enhancements · HyperOS Super Island · Media cards · AOD lyrics
+  Apple Music enhancements · HyperOS HyperIsland · Media cards · AOD lyrics
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 
 ---
 
-HyperLyrics Enhanced is an **LSPosed module for lyrics in Super Island and on the always-on display (AOD)** on **Xiaomi HyperOS devices**. It also offers **Apple Music enhancements for Android devices beyond Xiaomi**. Lyricon Central, the lyrics service, and the Apple Music Provider are built in; plugins connect other music apps. Devices without LSPosed can use notification-based lyrics instead.
+HyperLyrics Enhanced is an **LSPosed module for lyrics in HyperIsland and on the always-on display (AOD)** on **Xiaomi HyperOS devices**. It also offers **Apple Music enhancements for Android devices beyond Xiaomi**. Lyricon Central, the lyrics service, and the Apple Music Provider are built in; plugins connect other music apps. Devices without LSPosed can use notification-based lyrics instead.
 
 This project is based on [limczhh/HyperLyric](https://github.com/limczhh/HyperLyric) and is maintained independently.
 
@@ -41,11 +41,11 @@ This project is based on [limczhh/HyperLyric](https://github.com/limczhh/HyperLy
 ## Screenshots
 
 <p align="center">
-  <a href="assets/screenshots/渐变封面样式超级岛.jpg"><img src="assets/screenshots/渐变封面样式超级岛.jpg" alt="Super Island: Gradient covers · Cover-derived gradient colors" width="55%" /></a>
+  <a href="assets/screenshots/渐变封面样式超级岛.jpg"><img src="assets/screenshots/渐变封面样式超级岛.jpg" alt="HyperIsland: Gradient covers · Cover-derived gradient colors" width="55%" /></a>
   <a href="assets/screenshots/AM歌词发音翻译弹窗.jpg"><img src="assets/screenshots/AM歌词发音翻译弹窗.jpg" alt="Apple Music: Switch lyrics, pronunciation and translation sources" width="43%" /></a>
 </p>
 <p align="center">
-  <sub><strong>Super Island</strong> · Gradient covers · Cover-derived gradient colors</sub><br />
+  <sub><strong>HyperIsland</strong> · Gradient covers · Cover-derived gradient colors</sub><br />
   <sub><strong>Apple Music</strong> · Switch lyrics, pronunciation and translation sources</sub>
 </p>
 
@@ -75,7 +75,7 @@ Building on HyperLyric's system-level lyric display, Enhanced focuses on **fewer
 | **Enhancements inside Apple Music** | Lyrics are passed to the system UI through lyric providers | **Supplement lyrics, translations and pronunciation, and switch sources inside Apple Music**, alongside font, blur, regional metadata and playback adjustments |
 | **Multiple lyric and translation sources** | Online lyric retrieval from NetEase Cloud Music and QQ Music, plus translations supplied by lyric sources | **Four sources: NetEase, QQ Music, Kugou and Kuwo**, with source ordering, per-app controls and automatic best-match selection; Apple Music's native content takes priority by default, with missing content supplemented |
 | **AOD lyrics** | No dedicated AOD lyric feature | **Separate lock-screen AOD and classic AOD lyric modes**, with controls for main vocals, backing vocals, translations, the next line, duet layouts and pause behavior |
-| **An interface tailored to the device and your needs** | A single configuration approach for feature controls and device support | **A two-pane parallel-window UI** for wide screens, plus **feature entry controls** for Super Island, AOD lyrics, notification lyrics and Apple Music enhancements, so you can keep only the sections you need |
+| **An interface tailored to the device and your needs** | A single configuration approach for feature controls and device support | **A two-pane parallel-window UI** for wide screens, plus **feature entry controls** for HyperIsland, AOD lyrics, notification lyrics and Apple Music enhancements, so you can keep only the sections you need |
 
 > **Please note:** This comparison describes the project's focus, not a comprehensive review or a ranking of the upstream project. Both projects continue to evolve, and differences may change between versions. Availability depends on the device, system and music app version; refer to each project's release notes and actual behavior on your device.
 
@@ -89,16 +89,16 @@ Building on HyperLyric's system-level lyric display, Enhanced focuses on **fewer
 
 > Region and language adjustments only affect presentation. They do not unlock songs or services unavailable in your account's region. Apple Music enhancements are not limited to Xiaomi devices, but still require LSPosed and a compatible Apple Music version.
 
-### From Super Island to the always-on display
+### From HyperIsland to the always-on display
 
 | Where lyrics appear | Available controls |
 | :--- | :--- |
-| **Super Island** | Word-by-word lyrics, backing vocals, duets, translations and pronunciation; dynamic width and width limits, fixed duet width and width-limit removal; cover art, colors and audio-reactive effects |
-| **Media cards** | Separate settings for notification-center cards and the expanded Super Island card, including cover backgrounds, blur, soft lighting and animated flowing colors |
+| **HyperIsland** | Word-by-word lyrics, backing vocals, duets, translations and pronunciation; dynamic width and width limits, fixed duet width and width-limit removal; cover art, colors and audio-reactive effects |
+| **Media cards** | Separate settings for notification-center cards and the expanded HyperIsland card, including cover backgrounds, blur, soft lighting and animated flowing colors |
 | **Lock-screen AOD / classic AOD** | Main lyrics, backing vocals, translations, the next line, duet layouts, pause behavior and positioning; classic AOD can show track information using a Focus notification or embedded text |
 | **Notification-based Dynamic Island** | A non-root lyric display option with notification styles, icons, a progress bar, track information, tap actions and an app allowlist |
 
-Available styles and controls depend on the system, device and data supplied by the player. Notification-based Dynamic Island mode does not add native HyperOS Super Island to other devices.
+Available styles and controls depend on the system, device and data supplied by the player. Notification-based Dynamic Island mode does not add native HyperOS HyperIsland to other devices.
 
 ### More music apps, more lyric sources
 
@@ -110,7 +110,7 @@ Available styles and controls depend on the system, device and data supplied by 
 
 ### Configure it for your device and habits
 
-**Feature switches** control the entries for Super Island, AOD lyrics, notification-based Dynamic Island and Apple Music enhancements. Wide-screen devices can enable the **parallel-window UI**. Other settings include themes and colors, hiding the launcher icon, an entry in system Settings, configuration backup and restore, and log viewing and export.
+**Feature switches** control the entries for HyperIsland, AOD lyrics, notification-based Dynamic Island and Apple Music enhancements. Wide-screen devices can enable the **parallel-window UI**. Other settings include themes and colors, hiding the launcher icon, an entry in system Settings, configuration backup and restore, and log viewing and export.
 
 <a id="quick-start"></a>
 ## Quick start
@@ -121,7 +121,7 @@ Download an APK from [Releases](https://github.com/juren233/HyperLyrics-Enhanced
 
 | What you want | Mode | Requirements |
 | :--- | :--- | :--- |
-| Lyrics in HyperOS Super Island, media cards or AOD | **LSPosed mode** | LSPosed v2.0+, the required scopes and a compatible system implementation |
+| Lyrics in HyperOS HyperIsland, media cards or AOD | **LSPosed mode** | LSPosed v2.0+, the required scopes and a compatible system implementation |
 | Apple Music enhancements without Xiaomi-specific system features | **LSPosed mode** | LSPosed and a compatible Apple Music version; Xiaomi-specific entries can be disabled |
 | Notification lyrics without root / LSPosed | **Notification mode** | Notification permission, notification access and usable player data |
 
@@ -134,7 +134,7 @@ The two display paths can be configured separately. Notification mode does not p
 3. Configure player integration:
    - **Apple Music:** Ready to use without additional plugins or modules.
    - **Other players:** Open **Lyricon configuration**, add and enable the relevant plugin, then check its scope as instructed.
-4. Enable **Xiaomi Super Island lyrics**, **Xiaomi AOD lyrics** or **Apple Music enhancements** as needed, then adjust their individual settings.
+4. Enable **Xiaomi HyperIsland lyrics**, **Xiaomi AOD lyrics** or **Apple Music enhancements** as needed, then adjust their individual settings.
 5. Restart the system UI and the relevant music apps when prompted so the module and plugins can take effect.
 
 <details>
@@ -177,7 +177,7 @@ If you only use Apple Music enhancements, you do not need to select system compo
 
 | Feature | Environment and limitations |
 | :--- | :--- |
-| Super Island and media-card enhancements | Targets HyperOS 3 / 4 with LSPosed v2.0+; depends on the specific SystemUI and system plugin implementations |
+| HyperIsland and media-card enhancements | Targets HyperOS 3 / 4 with LSPosed v2.0+; depends on the specific SystemUI and system plugin implementations |
 | Apple Music enhancements | Android 13+ with LSPosed; the code includes adaptation profiles for **Apple Music 6.5.0–6.5.3**, not a guarantee of compatibility with arbitrary versions |
 | Project-maintained Provider plugins | Requires the relevant app, plugin and scope; consult the plugin catalog and release notes for versions and capabilities |
 | Lock-screen AOD / classic AOD | Xiaomi-family devices with a compatible AOD implementation; presentation varies by system |
@@ -210,7 +210,7 @@ Check that the module and plugin are enabled, the scope is correct, the right ly
 <details>
 <summary><strong>Can I use this on a non-Xiaomi or non-rooted device?</strong></summary>
 
-Use the features supported by your environment: non-Xiaomi devices can use Apple Music enhancements with a compatible LSPosed setup; devices without root / LSPosed can try notification lyrics. HyperOS Super Island and AOD lyrics are not supported on other systems.
+Use the features supported by your environment: non-Xiaomi devices can use Apple Music enhancements with a compatible LSPosed setup; devices without root / LSPosed can try notification lyrics. HyperOS HyperIsland and AOD lyrics are not supported on other systems.
 
 </details>
 

@@ -214,7 +214,7 @@ fun SettingsPage(scrollToFeatureSwitches: Boolean = false) {
     }
     var superIslandEntryEnabled by remember {
         mutableStateOf(
-            prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_SUPER_ISLAND, xiaomiDevice)
+            prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_HYPER_ISLAND, xiaomiDevice)
         )
     }
     var aodLyricsEntryEnabled by remember {
@@ -313,10 +313,10 @@ fun SettingsPage(scrollToFeatureSwitches: Boolean = false) {
                     superIslandEntryEnabled = superIslandEntryEnabled,
                     onSuperIslandEntryToggle = { enabled ->
                         toggleFeatureEntry(
-                            UIConstants.KEY_FEATURE_ENTRY_SUPER_ISLAND,
+                            UIConstants.KEY_FEATURE_ENTRY_HYPER_ISLAND,
                             enabled,
                             { superIslandEntryEnabled = it },
-                            RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
+                            RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND,
                         )
                     },
                     aodLyricsEntryEnabled = aodLyricsEntryEnabled,
@@ -522,7 +522,7 @@ private fun LazyListScope.settingsSections(
         Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
             Column {
                 SwitchPreference(
-                    title = stringResource(R.string.title_feature_entry_super_island),
+                    title = stringResource(R.string.title_feature_entry_hyper_island),
                     checked = superIslandEntryEnabled,
                     onCheckedChange = onSuperIslandEntryToggle,
                 )

@@ -111,10 +111,10 @@ object FeatureEntryInitializer {
         seedEntry(
             prefs = prefs,
             writes = writes,
-            entryKey = UIConstants.KEY_FEATURE_ENTRY_SUPER_ISLAND,
+            entryKey = UIConstants.KEY_FEATURE_ENTRY_HYPER_ISLAND,
             defaultEnabled = xiaomiDevice,
-            featureKey = RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-            featureDefault = RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND,
+            featureKey = RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND,
+            featureDefault = RootConstants.DEFAULT_HOOK_ENABLE_HYPER_ISLAND,
         )
         seedEntry(
             prefs = prefs,

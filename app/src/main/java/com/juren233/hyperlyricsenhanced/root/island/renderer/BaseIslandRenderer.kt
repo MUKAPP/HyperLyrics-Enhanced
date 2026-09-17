@@ -66,7 +66,7 @@ object BaseIslandRenderer : IslandRenderer {
      */
     fun shouldRenderInjectedIsland(): Boolean {
         val prefs = HookEntry.instance?.prefs ?: return false
-        if (!prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND)) {
+        if (!prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_HYPER_ISLAND)) {
             return false
         }
         val behavior = prefs.getInt(
@@ -140,7 +140,7 @@ object BaseIslandRenderer : IslandRenderer {
             DisplayDiagnosticLogger.log("ISLAND", "skipped", "preferences_unavailable")
             return
         }
-        if (!prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND)) {
+        if (!prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_HYPER_ISLAND)) {
             clearAllViews()
             DisplayDiagnosticLogger.log("ISLAND", "hidden", "feature_disabled")
             return
@@ -214,7 +214,7 @@ object BaseIslandRenderer : IslandRenderer {
     }
 
     override fun updateLyricLine() {
-        if ((HookEntry.instance?.prefs?.getBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND)) != true) {
+        if ((HookEntry.instance?.prefs?.getBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_HYPER_ISLAND)) != true) {
             DisplayDiagnosticLogger.log("ISLAND", "skipped", "feature_disabled")
             return
         }
@@ -276,7 +276,7 @@ object BaseIslandRenderer : IslandRenderer {
 
     private fun updatePositionForActiveViews(position: Long, isSeek: Boolean) {
         val prefs = HookEntry.instance?.prefs ?: return
-        if (!prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND)) return
+        if (!prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_HYPER_ISLAND)) return
         if (!shouldRenderInjectedIsland()) return
         val lyricPkg = LyriconDataBridge.currentLyricPackageName ?: return
 
@@ -316,7 +316,7 @@ object BaseIslandRenderer : IslandRenderer {
 
     override fun onPlaybackStateChanged(isPlaying: Boolean) {
         val prefs = HookEntry.instance?.prefs ?: return
-        if (!prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND)) {
+        if (!prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_HYPER_ISLAND)) {
             clearAllViews()
             return
         }

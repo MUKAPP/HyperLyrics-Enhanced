@@ -207,7 +207,7 @@ object ChangelogData {
     )
     private val MARKDOWN_HEADING_REGEX = Regex("^(#{1,6})\\s+(.+?)\\s*#*\\s*$")
     private val DOWNLOAD_HEADING_REGEX = Regex(
-        "^(?:下载说明|下载须知|download(?:\\s+(?:instructions?|notes?))?)\\s*[:：]?$",
+        "^(?:(?:下载说明|下载须知)(?:\\s*[/·]\\s*download(?:\\s+(?:instructions?|notes?))?)?|download(?:\\s+(?:instructions?|notes?))?)\\s*[:：]?$",
         RegexOption.IGNORE_CASE
     )
     private val THEMATIC_BREAK_REGEX = Regex("^(?:-{3,}|_{3,}|\\*{3,})$")

@@ -10,6 +10,7 @@ import com.juren233.hyperlyricsenhanced.common.LogLevelPolicy
 import com.juren233.hyperlyricsenhanced.common.PreferenceDiagnostics
 import com.juren233.hyperlyricsenhanced.common.PrefsBridge
 import com.juren233.hyperlyricsenhanced.common.RootConstants
+import com.juren233.hyperlyricsenhanced.common.StorageKeyMigrator
 import com.juren233.hyperlyricsenhanced.common.UIConstants
 import com.juren233.hyperlyricsenhanced.provider.OfficialProviderScopeManager
 import com.juren233.hyperlyricsenhanced.ui.utils.AppUtils
@@ -27,6 +28,7 @@ class RootApplication : Application() {
         applyBuildDefaultLogLevel()
         LogManager.init(this)
         PrefsBridge.init(this)
+        StorageKeyMigrator.migrateLegacySuperIslandKeys(this)
         appContext = this
         initializeFeatureEntries()
 

@@ -46,7 +46,7 @@ fun LazyListScope.homePageSections(
         )
     }
 
-    item(key = "basic_features_content_super_island") {
+    item(key = "basic_features_content_hyper_island") {
         Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).fillMaxWidth()) {
             ArrowPreference(
                 title = stringResource(R.string.title_lyric_settings),
@@ -67,7 +67,7 @@ fun LazyListScope.homePageSections(
                 AnimatedVisibility(visible = enableSuperIsland) {
                     Column {
                         ArrowPreference(
-                            title = stringResource(R.string.title_super_island_lyrics_config),
+                            title = stringResource(R.string.title_hyper_island_lyrics_config),
                             onClick = onSuperIslandConfigClick,
                         )
                         ArrowPreference(

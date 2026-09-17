@@ -48,7 +48,7 @@ internal object RealIslandHooker {
             runCatching {
                 val contentView = chain.thisObject as? ViewGroup ?: return@runCatching
                 val prefs = HookEntry.instance?.prefs ?: return@runCatching
-                if (!prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND)) {
+                if (!prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_HYPER_ISLAND)) {
                     return@runCatching
                 }
 

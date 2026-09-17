@@ -156,7 +156,7 @@ fun MainPage() {
     }
     var superIslandEntryEnabled by remember {
         mutableStateOf(
-            prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_SUPER_ISLAND, xiaomiDevice)
+            prefs.getBoolean(UIConstants.KEY_FEATURE_ENTRY_HYPER_ISLAND, xiaomiDevice)
         )
     }
     var aodLyricsEntryEnabled by remember {
@@ -235,7 +235,7 @@ fun MainPage() {
     // 平行窗口 UI：仅宽屏且开关开启时启用（侧栏 + 双栏场景），关闭后回落为底部栏单栏布局
     val parallelWindowUi = isWideScreen && parallelWindowUiEnabled
     var enableSuperIsland by remember {
-        mutableStateOf(prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND))
+        mutableStateOf(prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_HYPER_ISLAND))
     }
     var enableAodLyrics by remember {
         mutableStateOf(prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE_AOD_LYRICS, RootConstants.DEFAULT_HOOK_ENABLE_AOD_LYRICS))
@@ -259,12 +259,12 @@ fun MainPage() {
                     floatingNavBarEnabled = p.getBoolean(UIConstants.KEY_FLOATING_NAV_BAR, UIConstants.DEFAULT_FLOATING_NAV_BAR)
                 UIConstants.KEY_PARALLEL_WINDOW_UI ->
                     parallelWindowUiEnabled = p.getBoolean(UIConstants.KEY_PARALLEL_WINDOW_UI, UIConstants.DEFAULT_PARALLEL_WINDOW_UI)
-                RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND ->
-                    enableSuperIsland = p.getBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND)
+                RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND ->
+                    enableSuperIsland = p.getBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, RootConstants.DEFAULT_HOOK_ENABLE_HYPER_ISLAND)
                 RootConstants.KEY_HOOK_ENABLE_AOD_LYRICS ->
                     enableAodLyrics = p.getBoolean(RootConstants.KEY_HOOK_ENABLE_AOD_LYRICS, RootConstants.DEFAULT_HOOK_ENABLE_AOD_LYRICS)
-                UIConstants.KEY_FEATURE_ENTRY_SUPER_ISLAND ->
-                    superIslandEntryEnabled = p.getBoolean(UIConstants.KEY_FEATURE_ENTRY_SUPER_ISLAND, xiaomiDevice)
+                UIConstants.KEY_FEATURE_ENTRY_HYPER_ISLAND ->
+                    superIslandEntryEnabled = p.getBoolean(UIConstants.KEY_FEATURE_ENTRY_HYPER_ISLAND, xiaomiDevice)
                 UIConstants.KEY_FEATURE_ENTRY_AOD_LYRICS ->
                     aodLyricsEntryEnabled = p.getBoolean(UIConstants.KEY_FEATURE_ENTRY_AOD_LYRICS, xiaomiDevice)
                 UIConstants.KEY_FEATURE_ENTRY_DYNAMIC_ISLAND ->
@@ -305,8 +305,8 @@ fun MainPage() {
         if (isChecked) {
             if (RootApplication.xposedService != null) {
                 enableSuperIsland = true
-                prefs.edit { putBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, true) }
-                PrefsBridge.putBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, true)
+                prefs.edit { putBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, true) }
+                PrefsBridge.putBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, true)
             } else {
                 scope.launch {
                     snackbarHostState.showSnackbar(
@@ -317,8 +317,8 @@ fun MainPage() {
             }
         } else {
             enableSuperIsland = false
-            prefs.edit { putBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, false) }
-            PrefsBridge.putBoolean(RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND, false)
+            prefs.edit { putBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, false) }
+            PrefsBridge.putBoolean(RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND, false)
         }
     } }
 

@@ -211,11 +211,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          PREV_TAG="${{ steps.gate.outputs.prev_stable_tag }}"
           CHANNEL="${{ steps.gate.outputs.channel }}"
           BODY_DELIMITER="release_body_$(git rev-parse HEAD)"
           echo "body<<$BODY_DELIMITER" >> "$GITHUB_OUTPUT"
-          .github/scripts/generate-release-body.sh "$PREV_TAG" HEAD "$CHANNEL" >> "$GITHUB_OUTPUT"
+          .github/scripts/generate-release-body.sh HEAD "$CHANNEL" >> "$GITHUB_OUTPUT"
           echo "$BODY_DELIMITER" >> "$GITHUB_OUTPUT"
 
       - name: 创建正式版发布 Create Stable Release

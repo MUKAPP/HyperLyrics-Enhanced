@@ -19,7 +19,7 @@ object UIConstants {
     const val KEY_LOG_LEVEL = "key_log_level"
     const val KEY_LOG_LEVEL_BUILD_KIND = "key_log_level_build_kind"
     const val KEY_LAST_SEEN_VERSION = "key_last_seen_version"
-    const val KEY_FEATURE_ENTRY_SUPER_ISLAND = "key_feature_entry_super_island"
+    const val KEY_FEATURE_ENTRY_HYPER_ISLAND = "key_feature_entry_hyper_island"
     const val KEY_FEATURE_ENTRY_AOD_LYRICS = "key_feature_entry_aod_lyrics"
     const val KEY_FEATURE_ENTRY_DYNAMIC_ISLAND = "key_feature_entry_dynamic_island"
     const val KEY_FEATURE_ENTRY_APPLE_MUSIC = "key_feature_entry_apple_music"

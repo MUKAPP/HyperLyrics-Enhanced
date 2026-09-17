@@ -7,8 +7,8 @@ internal object SystemUiEnhancementGate {
         val entry = HookEntry.instance ?: return false
         return runCatching {
             entry.prefs.getBoolean(
-                RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-                RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND
+                RootConstants.KEY_HOOK_ENABLE_HYPER_ISLAND,
+                RootConstants.DEFAULT_HOOK_ENABLE_HYPER_ISLAND
             )
         }.getOrDefault(false)
     }
