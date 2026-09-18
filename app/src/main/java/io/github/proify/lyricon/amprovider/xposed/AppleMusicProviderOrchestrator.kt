@@ -7,6 +7,7 @@
 package io.github.proify.lyricon.amprovider.xposed
 
 import android.app.Application
+import com.juren233.hyperlyricsenhanced.root.utils.RuntimePerfDiagnostics
 import io.github.libxposed.api.XposedModule
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -91,6 +92,8 @@ internal object AppleMusicProviderOrchestrator {
 
     private fun onAppCreate(app: Application) {
         if (!initialized.compareAndSet(false, true)) return
+        // debug 包专用：性能/功耗采样（CPU、线程、电池），release 为空操作。
+        RuntimePerfDiagnostics.start(app, scope = "applemusic")
         val appleMusicVersion = runCatching {
             val packageInfo = app.packageManager.getPackageInfo(APPLE_MUSIC_PACKAGE, 0)
             AppleMusicVersion(

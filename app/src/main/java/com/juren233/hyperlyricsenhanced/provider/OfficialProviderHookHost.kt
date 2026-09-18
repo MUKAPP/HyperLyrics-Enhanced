@@ -20,6 +20,7 @@ import com.juren233.hyperlyricsenhanced.common.UIConstants
 import com.juren233.hyperlyricsenhanced.common.dexkit.DexMethodWatchdog
 import com.juren233.hyperlyricsenhanced.common.dexkit.DexResolutionSource
 import com.juren233.hyperlyricsenhanced.common.dexkit.DexWatchdogEvent
+import com.juren233.hyperlyricsenhanced.root.utils.RuntimePerfDiagnostics
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import org.luckypray.dexkit.DexKitBridge
@@ -78,6 +79,8 @@ internal class OfficialProviderHookHost(
     ) {
         if (application.packageName != packageName) return
         if (!handledApplications.add(application)) return
+        // debug 包专用：性能/功耗采样（CPU、线程、电池），release 为空操作。
+        RuntimePerfDiagnostics.start(application, scope = "provider:$packageName")
         runCatching { callback.onApplicationCreated(application) }
             .onSuccess {
                 module.log(

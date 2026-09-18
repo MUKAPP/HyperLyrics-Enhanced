@@ -204,19 +204,37 @@ open class LyricLineView(context: Context, attrs: AttributeSet? = null) :
 
     val textSize: Float get() = textPaint.textSize
 
-    fun currentTextStartX(): Float = resolveTextStartX(lineWidth, _model.isAlignedRight)
+    fun currentTextStartX(availableWidthOverride: Float? = null): Float =
+        resolveTextStartX(lineWidth, _model.isAlignedRight, availableWidthOverride = availableWidthOverride)
 
     fun textStartX(
         text: String?,
         isAlignedRight: Boolean,
         centerIfPossibleOverride: Boolean? = null,
-        alignRightOverride: Boolean? = null
-    ): Float = resolveTextStartX(
-        textPaint.measureText(text.orEmpty()),
-        isAlignedRight,
-        centerIfPossibleOverride,
-        alignRightOverride
-    )
+        alignRightOverride: Boolean? = null,
+        availableWidthOverride: Float? = null
+    ): Float {
+        // 必须与 LyricModel.updateSizes 同管线测宽：混排窄体开启时英数走窄字体
+        // （≈0.8×宽），朴素 measureText 全按基础字体会高估 ~25%，提升动画的
+        // 横向目标被算小/误判溢出锚到左缘，落地按模型真宽居中即视觉跳变。
+        val raw = text.orEmpty()
+        val selector = currentTypefaceSelector
+        val measuredWidth = if (selector != null) {
+            MixedTypefaceText.measureText(textPaint, raw, selector)
+        } else {
+            val measureWidth = textPaint.measureText(raw)
+            val bounds = android.graphics.Rect()
+            textPaint.getTextBounds(raw, 0, raw.length, bounds)
+            if (bounds.right > measureWidth) bounds.right.toFloat() else measureWidth
+        }
+        return resolveTextStartX(
+            measuredWidth,
+            isAlignedRight,
+            centerIfPossibleOverride,
+            alignRightOverride,
+            availableWidthOverride
+        )
+    }
 
     fun setTextSize(size: Float) {
         val needsUpdate = textPaint.textSize != size || syncRenderer.bgPaint.textSize != size
@@ -762,12 +780,15 @@ open class LyricLineView(context: Context, attrs: AttributeSet? = null) :
         textWidth: Float,
         isAlignedRight: Boolean,
         centerIfPossibleOverride: Boolean? = null,
-        alignRightOverride: Boolean? = null
+        alignRightOverride: Boolean? = null,
+        availableWidthOverride: Float? = null
     ): Float {
         // 布局宽度优先：原生岛以展开几何做瞬态测量时 measuredWidth 会被抬到
         // hug 下限（如对唱全曲最长行），据此算出的换边/居中偏移会把文本推出
         // 实际岛宽造成裁切；scrollWidth 才是用户可见宽度，语义同 scrollWidth 属性。
-        val availableWidth = scrollWidth.toFloat()
+        // availableWidthOverride 供提升动画按落定宽度（pendingHugWidth）预算
+        // 横向目标：按当前旧宽算会因溢出分支把上升线锚到左缘、落地才居中。
+        val availableWidth = availableWidthOverride ?: scrollWidth.toFloat()
         val centerFlag = centerIfPossibleOverride ?: centerIfPossible
         val rightFlag = alignRightOverride ?: alignRight
         return when {

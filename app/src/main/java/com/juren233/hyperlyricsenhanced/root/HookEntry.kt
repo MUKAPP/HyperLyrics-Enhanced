@@ -12,6 +12,7 @@ import android.os.Looper
 import com.juren233.hyperlyricsenhanced.lyric.source.SourceManager
 import com.juren233.hyperlyricsenhanced.root.island.FakeIslandTransitionHooker
 import com.juren233.hyperlyricsenhanced.root.island.IslandAlbumCoverStyleHooker
+import com.juren233.hyperlyricsenhanced.root.island.IslandViewRegistry
 import com.juren233.hyperlyricsenhanced.root.island.IslandMusicWaveColorHooker
 import com.juren233.hyperlyricsenhanced.root.island.IslandProgressGlowController
 import com.juren233.hyperlyricsenhanced.root.island.IslandRuntimePreferenceOverrides
@@ -41,6 +42,7 @@ import com.juren233.hyperlyricsenhanced.root.source.RootLyricSink
 import com.juren233.hyperlyricsenhanced.root.source.SuperLyricSource
 import com.juren233.hyperlyricsenhanced.root.aitrans.AITranslator
 import com.juren233.hyperlyricsenhanced.root.utils.HookLogger
+import com.juren233.hyperlyricsenhanced.root.utils.RuntimePerfDiagnostics
 import com.juren233.hyperlyricsenhanced.common.PreferenceDiagnostics
 import com.juren233.hyperlyricsenhanced.common.RootConstants
 import com.juren233.hyperlyricsenhanced.common.UIConstants
@@ -449,6 +451,18 @@ class HookEntry : XposedModule() {
                 sourceManager?.start()
             }
             SystemUiScreenStateMonitor.initialize(app)
+            // debug 包专用：性能/功耗采样（CPU、线程、电池、岛帧耗时），release 为空操作。
+            RuntimePerfDiagnostics.start(
+                app = app,
+                scope = "systemui",
+                stateProvider = {
+                    "mode=$activeMode," +
+                        "playing=${LyriconDataBridge.currentPlaybackState}," +
+                        "pkg=${LyriconDataBridge.currentLyricPackageName ?: LyriconDataBridge.activePackageName}," +
+                        "islandViews=${IslandViewRegistry.snapshotAttached().size}"
+                },
+                frameViewProvider = { IslandViewRegistry.snapshotAttached().map { it.first } },
+            )
             AodEnvironmentDiagnostics.log(
                 context = app,
                 stage = "systemui_init",

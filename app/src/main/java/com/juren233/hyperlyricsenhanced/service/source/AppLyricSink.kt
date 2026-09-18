@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 import com.juren233.hyperlyricsenhanced.common.RootConstants
 import com.juren233.hyperlyricsenhanced.common.ClassicAodSongInfoConfig
 import com.juren233.hyperlyricsenhanced.common.ServiceConstants
@@ -28,12 +29,15 @@ class AppLyricSink(
     private val scope: CoroutineScope,
     private val notificationPresenter: NotificationPresenter
 ) : LyricSchedulerListener {
+    @Volatile
     private var currentSongIdentifier = ""
     private var cachedNotificationEnabled = false
     private var lastPermissionCheckTime = 0L
     private val permissionCheckInterval = 30_000L
 
+    @Volatile
     private var cachedLyricLines: List<LrcLine>? = null
+    @Volatile
     private var cachedLyricHash: Int = 0
 
     private val sourceManager = ServiceSourceManager(context)
@@ -41,9 +45,19 @@ class AppLyricSink(
 
     private var collectJob: Job? = null
     private var fetchJob: Job? = null
+    @Volatile
     private var isCurrentlyPlaying: Boolean = false
+    @Volatile
     private var lastDispatchedLrc: String = ""
+    @Volatile
     private var currentSyncData: SyncData? = null
+
+    /**
+     * 取词代次。新 fetch 启动、切歌、停止、清空状态时自增；
+     * getLyrics 路径无挂起点，被 cancel 的旧 fetch 仍会跑完，必须凭代次拒绝回写，
+     * 否则新旧两个 fetch 完成回调并发重启调度器（Issue #34 孤儿 ticker 的源头）。
+     */
+    private val fetchGeneration = AtomicLong(0L)
 
     fun startCollecting(lyricUpdateFlow: Flow<SyncData>, newSongFlow: Flow<Unit>) {
         collectJob = scope.launch(Dispatchers.Default) {
@@ -53,6 +67,7 @@ class AppLyricSink(
             newSongFlow.collect {
                 fetchJob?.cancel()
                 fetchJob = null
+                fetchGeneration.incrementAndGet()
                 lyricScheduler.stop()
             }
         }
@@ -63,12 +78,14 @@ class AppLyricSink(
         collectJob = null
         fetchJob?.cancel()
         fetchJob = null
+        fetchGeneration.incrementAndGet()
         lyricScheduler.stop()
     }
 
     fun clearState() {
         fetchJob?.cancel()
         fetchJob = null
+        fetchGeneration.incrementAndGet()
         currentSongIdentifier = ""
         isCurrentlyPlaying = false
         cachedLyricLines = null
@@ -191,6 +208,7 @@ class AppLyricSink(
 
         if (needFetchLyrics && lyricSource != ServiceConstants.LYRIC_SOURCE_TITLE) {
             fetchJob?.cancel()
+            val generation = fetchGeneration.incrementAndGet()
             fetchJob = scope.launch(Dispatchers.IO) {
                 val isOnline = lyricSource == ServiceConstants.LYRIC_SOURCE_ONLINE
                 if (isOnline) {
@@ -203,7 +221,9 @@ class AppLyricSink(
                     DynamicLyricData.updateFetchingLyrics(false)
                 }
 
-                if (currentSongIdentifier == data.identifier) {
+                // getLyrics 无挂起点，被更新的取词取代后仍会跑到这里：凭代次拒绝回写，
+                // 防止新旧 fetch 双完成并发重启调度器。
+                if (currentSongIdentifier == data.identifier && fetchGeneration.get() == generation) {
                     if (!rawLines.isNullOrEmpty()) {
                         cachedLyricLines = rawLines
                         cachedLyricHash = currentRawHash

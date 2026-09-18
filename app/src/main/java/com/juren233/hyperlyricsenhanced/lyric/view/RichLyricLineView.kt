@@ -658,18 +658,36 @@ class RichLyricLineView(
             NEXT_LINE_PROMOTION_DURATION
         }
         val targetTranslationY = (main.top - secondary.top).toFloat()
-        val secondaryTextStartX = secondary.currentTextStartX()
+        // 横向起点与目标统一按落定宽度（pendingHugWidth，装配层在 line 写入前
+        // 已设置）计算：宽度过渡期间次行的居中偏移随动画宽度重算，两端若按
+        // 当前旧宽取值，目标会被旧宽的溢出分支归零锚到左缘，落地按新宽居中
+        // 时再跳一次（位置偏好=居中时即"先向左上浮、落地突变居中"）。
+        val landingWidth = pendingHugWidth?.toFloat()
+        val secondaryTextStartX = secondary.currentTextStartX(landingWidth)
         // 目标 X 按落定对齐（暂存值）计算：此刻旧句标志仍是上一行的方向，
         // 直接读 main 当前标志会把滑入文本锚到错误位置、落地时再跳一次。
         val targetMainTextStartX = main.textStartX(
             nextMainText,
             nextMainAlignedRight,
             centerIfPossibleOverride = stagedPromotionCentering?.first,
-            alignRightOverride = stagedPromotionRightAlign?.first
+            alignRightOverride = stagedPromotionRightAlign?.first,
+            availableWidthOverride = landingWidth
         )
         val targetTranslationX = (main.left - secondary.left).toFloat() +
                 targetMainTextStartX - secondaryTextStartX
         val targetScale = (main.textSize / secondary.textSize).coerceIn(0.5f, 2f)
+        if (BuildConfig.DEBUG) {
+            HookLogger.d(
+                "SwitchTrace",
+                "promotion begin view=${System.identityHashCode(this).toString(16)} " +
+                    "mainLeft=${main.left} secLeft=${secondary.left} " +
+                    "mainW=${main.scrollWidth} mainLW=${main.lineWidth} mainCenter=${main.centerIfPossible} " +
+                    "secW=${secondary.scrollWidth} secLW=${secondary.lineWidth} secCenter=${secondary.centerIfPossible} " +
+                    "landingW=$landingWidth secStartX=$secondaryTextStartX targetMainX=$targetMainTextStartX " +
+                    "dT=$targetTranslationX dY=$targetTranslationY scale=$targetScale nextRight=$nextMainAlignedRight " +
+                    "stagedCenter=${stagedPromotionCentering?.first} stagedRight=${stagedPromotionRightAlign?.first}"
+            )
+        }
 
         main.animate().cancel()
         secondary.animate().cancel()
@@ -691,6 +709,16 @@ class RichLyricLineView(
             .setListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     if (generation != nextLineTransitionGeneration) return
+                    if (BuildConfig.DEBUG) {
+                        HookLogger.d(
+                            "SwitchTrace",
+                            "promotion anim end view=${System.identityHashCode(this@RichLyricLineView).toString(16)} " +
+                                "secTransX=${secondary.translationX} " +
+                                "secVisualX=${secondary.currentTextStartX() + secondary.translationX} " +
+                                "secW=${secondary.scrollWidth} secLW=${secondary.lineWidth} " +
+                                "secCenter=${secondary.centerIfPossible}"
+                        )
+                    }
                     finishNextLinePromotion()
                 }
             })
@@ -704,6 +732,14 @@ class RichLyricLineView(
         refreshLines(allowNextLinePromotion = false, bypassIdentityCheck = true)
         // 新内容已渲染，此刻套用暂存对齐——与内容同帧生效，旧句淡出期间不受影响。
         applyStagedPromotionAlignment()
+        if (BuildConfig.DEBUG) {
+            HookLogger.d(
+                "SwitchTrace",
+                "promotion landed view=${System.identityHashCode(this).toString(16)} " +
+                    "mainW=${main.scrollWidth} mainLW=${main.lineWidth} " +
+                    "mainCenter=${main.centerIfPossible} mainX=${main.currentTextStartX()}"
+            )
+        }
         onDeferredContentApplied?.invoke()
         if (alwaysShowSecondary) {
             secondary.alpha = 0f

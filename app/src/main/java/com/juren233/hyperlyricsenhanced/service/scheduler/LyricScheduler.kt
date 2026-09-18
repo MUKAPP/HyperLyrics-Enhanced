@@ -10,7 +10,6 @@ import com.juren233.hyperlyricsenhanced.utils.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
 interface LyricSchedulerListener {
@@ -23,8 +22,8 @@ class LyricScheduler(
     private val scope: CoroutineScope,
     private val listener: LyricSchedulerListener
 ) {
-    private var tickerJob: Job? = null
-    private var progressJob: Job? = null
+    private val tickerRegistry = SchedulerJobRegistry()
+    private val progressRegistry = SchedulerJobRegistry()
 
     @Volatile
     private var currentLyricLines: List<LrcLine>? = null
@@ -59,15 +58,15 @@ class LyricScheduler(
 
         if (lines != null) {
             // 有滚动歌词
-            if (isSongChanged || playStateChanged || tickerJob == null || tickerJob?.isActive != true) {
+            if (isSongChanged || playStateChanged || tickerRegistry.needsLaunch()) {
                 launchLyricScheduler(lines)
             }
-            if (isSongChanged || playStateChanged || progressJob == null || progressJob?.isActive != true) {
+            if (isSongChanged || playStateChanged || progressRegistry.needsLaunch()) {
                 launchProgressScheduler()
             }
         } else {
             // 没有滚动歌词 (静态标题模式)
-            if (isSongChanged || playStateChanged || progressJob == null || progressJob?.isActive != true) {
+            if (isSongChanged || playStateChanged || progressRegistry.needsLaunch()) {
                 launchProgressScheduler()
             }
         }
@@ -77,21 +76,21 @@ class LyricScheduler(
      * 停止全部调度任务
      */
     fun stop() {
-        tickerJob?.cancel()
-        tickerJob = null
-        progressJob?.cancel()
-        progressJob = null
+        tickerRegistry.clear()
+        progressRegistry.clear()
         currentLyricLines = null
         currentSyncData = null
         lastDispatchedLrc = ""
     }
 
     private fun launchLyricScheduler(lines: List<LrcLine>) {
-        tickerJob?.cancel()
         LogManager.d("LyricScheduler", "启动歌词滚动调度器: 行数=${lines.size}")
 
-        tickerJob = scope.launch {
+        tickerRegistry.launchReplacing(scope) {
+            val self = coroutineContext[Job]
             while (true) {
+                // 孤儿自愈：被更新的启动或 stop() 取代后立即退出，防止双 ticker 交替分发。
+                if (!tickerRegistry.isCurrent(self)) break
                 val data = currentSyncData ?: break
                 val currentPos = with(DynamicLyricData) { musicState.value.getCurrentPosition() }
 
@@ -110,15 +109,19 @@ class LyricScheduler(
     }
 
     private fun launchProgressScheduler() {
-        progressJob?.cancel()
         val sp = context.getSharedPreferences(UIConstants.PREF_NAME, Context.MODE_PRIVATE)
         val showProgress = sp.getBoolean(ServiceConstants.KEY_NOTIFICATION_SHOW_PROGRESS, ServiceConstants.DEFAULT_NOTIFICATION_SHOW_PROGRESS)
-        if (!showProgress) return
+        if (!showProgress) {
+            progressRegistry.clear()
+            return
+        }
         LogManager.d("LyricScheduler", "启动播放进度调度器")
 
-        progressJob = scope.launch {
+        progressRegistry.launchReplacing(scope) {
+            val self = coroutineContext[Job]
             var lastPercent = -1
             while (true) {
+                if (!progressRegistry.isCurrent(self)) break
                 val data = currentSyncData ?: break
                 val duration = data.duration
                 if (!data.isPlaying || duration <= 1000) break
