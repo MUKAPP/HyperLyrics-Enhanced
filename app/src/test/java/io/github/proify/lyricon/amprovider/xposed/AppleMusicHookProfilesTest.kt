@@ -976,6 +976,8 @@ class AppleMusicHookProfilesTest {
                 AppleMusicRuntimeMember.MEDIA_API_STOREFRONT_FIELD to "s",
                 AppleMusicRuntimeMember.MEDIA_API_DIRECT_QUERY_METHOD to "B",
                 AppleMusicRuntimeMember.CATALOG_RESPONSE_DATA_METHOD to "getData",
+                AppleMusicRuntimeMember.CATALOG_RESPONSE_STATUS_METHOD to "getHttpStatusCode",
+                AppleMusicRuntimeMember.CATALOG_RESPONSE_ERRORS_METHOD to "getErrors",
                 AppleMusicRuntimeMember.CATALOG_ENTITY_ID_METHOD to "getId",
                 AppleMusicRuntimeMember.CATALOG_ENTITY_SUBSCRIPTION_STORE_ID_METHOD to
                     "getSubscriptionStoreId",

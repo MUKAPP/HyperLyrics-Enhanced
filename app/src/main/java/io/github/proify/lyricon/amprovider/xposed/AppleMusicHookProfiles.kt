@@ -330,6 +330,8 @@ internal enum class AppleMusicRuntimeMember {
     MEDIA_API_STOREFRONT_FIELD,
     MEDIA_API_DIRECT_QUERY_METHOD,
     CATALOG_RESPONSE_DATA_METHOD,
+    CATALOG_RESPONSE_STATUS_METHOD,
+    CATALOG_RESPONSE_ERRORS_METHOD,
     CATALOG_ENTITY_ID_METHOD,
     CATALOG_ENTITY_SUBSCRIPTION_STORE_ID_METHOD,
     CATALOG_ENTITY_ASSET_ADAM_ID_METHOD,
@@ -1667,6 +1669,9 @@ internal object AppleMusicHookProfiles {
                     AppleMusicRuntimeMember.MEDIA_API_STOREFRONT_FIELD to "s",
                     AppleMusicRuntimeMember.MEDIA_API_DIRECT_QUERY_METHOD to "B",
                     AppleMusicRuntimeMember.CATALOG_RESPONSE_DATA_METHOD to "getData",
+                    AppleMusicRuntimeMember.CATALOG_RESPONSE_STATUS_METHOD to
+                        "getHttpStatusCode",
+                    AppleMusicRuntimeMember.CATALOG_RESPONSE_ERRORS_METHOD to "getErrors",
                     AppleMusicRuntimeMember.CATALOG_ENTITY_ID_METHOD to "getId",
                     AppleMusicRuntimeMember.CATALOG_ENTITY_SUBSCRIPTION_STORE_ID_METHOD to
                         "getSubscriptionStoreId",
