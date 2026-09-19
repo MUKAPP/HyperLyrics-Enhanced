@@ -374,6 +374,13 @@
     <!-- ———————————————————————— LyricAnimationPage ———————————————————————— -->
     <string name="option_anim_none">无动画</string>
     <string name="option_anim_default">默认</string>
+    <string name="title_switch_anim_rate">动画速率</string>
+    <string name="option_switch_anim_rate_swift">迅速</string>
+    <string name="option_switch_anim_rate_moderate">适中</string>
+    <string name="option_switch_anim_rate_elegant">优雅</string>
+    <string name="option_switch_anim_rate_custom">自定义</string>
+    <string name="title_switch_anim_custom_rate">自定义倍率</string>
+    <string name="label_switch_anim_custom_rate_range">倍率范围：0.1 ~ 5.0</string>
     <string name="option_anim_fade">渐隐渐现</string>
     <string name="option_anim_fade_up">向上渐隐＆向上渐现</string>
     <string name="option_anim_fade_down">向下渐隐＆向下渐现</string>

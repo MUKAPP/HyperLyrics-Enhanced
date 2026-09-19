@@ -37,6 +37,8 @@ internal data class IslandSlotRuntimeConfig(
     val centerGroupVocals: Boolean,
     val lyricAnimationEnabled: Boolean,
     val lyricAnimationId: String,
+    val switchAnimRate: String,
+    val switchAnimCustomRate: Float,
     val lyricMarqueeEnabled: Boolean,
     val lyricMarqueeSpeed: Int,
     val lyricMarqueeDelay: Int,
@@ -123,6 +125,10 @@ internal data class IslandSlotRuntimeConfig(
             rightContent = rightMode
         )
 
+    /** 换句动画速率倍率（各样式内置时长为 1x），仅用于歌词切换动画的出/入段缩放。 */
+    val switchAnimRateFactor: Float
+        get() = RootConstants.resolveSwitchAnimRateFactor(switchAnimRate, switchAnimCustomRate)
+
     val styleSignature: String = listOf(
         activeMode,
         textSizeSp,
@@ -139,6 +145,8 @@ internal data class IslandSlotRuntimeConfig(
         centerGroupVocals,
         lyricAnimationEnabled,
         lyricAnimationId,
+        switchAnimRate,
+        switchAnimCustomRate,
         lyricMarqueeEnabled,
         lyricMarqueeSpeed,
         lyricMarqueeDelay,
@@ -429,6 +437,8 @@ internal data class IslandSlotRuntimeConfig(
                 ),
                 lyricAnimationEnabled = prefs.getBoolean(RootConstants.KEY_HOOK_ANIM_ENABLE, RootConstants.DEFAULT_HOOK_ANIM_ENABLE),
                 lyricAnimationId = prefs.getString(RootConstants.KEY_HOOK_ANIM_ID, RootConstants.DEFAULT_HOOK_ANIM_ID) ?: RootConstants.DEFAULT_HOOK_ANIM_ID,
+                switchAnimRate = prefs.getString(RootConstants.KEY_HOOK_SWITCH_ANIM_RATE, RootConstants.DEFAULT_HOOK_SWITCH_ANIM_RATE) ?: RootConstants.DEFAULT_HOOK_SWITCH_ANIM_RATE,
+                switchAnimCustomRate = prefs.getFloat(RootConstants.KEY_HOOK_SWITCH_ANIM_CUSTOM_RATE, RootConstants.DEFAULT_HOOK_SWITCH_ANIM_CUSTOM_RATE),
                 lyricMarqueeEnabled = prefs.getBoolean(RootConstants.KEY_HOOK_MARQUEE_MODE, RootConstants.DEFAULT_HOOK_MARQUEE_MODE),
                 lyricMarqueeSpeed = prefs.getInt(RootConstants.KEY_HOOK_MARQUEE_SPEED, RootConstants.DEFAULT_HOOK_MARQUEE_SPEED),
                 lyricMarqueeDelay = prefs.getInt(RootConstants.KEY_HOOK_MARQUEE_DELAY, RootConstants.DEFAULT_HOOK_MARQUEE_DELAY),

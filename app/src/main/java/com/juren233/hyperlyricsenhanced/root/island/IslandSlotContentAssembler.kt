@@ -22,6 +22,7 @@ import com.juren233.hyperlyricsenhanced.lyric.view.SpaceGateRichLyricLineView
 import com.juren233.hyperlyricsenhanced.root.island.view.MaxWidthFrameLayout
 import com.juren233.hyperlyricsenhanced.lyric.view.LyricViewStyle
 import com.juren233.hyperlyricsenhanced.lyric.view.isTitleLine
+import com.juren233.hyperlyricsenhanced.lyric.view.yoyo.AnimConfig
 import com.juren233.hyperlyricsenhanced.lyric.view.yoyo.YoYoPresets
 import com.juren233.hyperlyricsenhanced.lyric.view.yoyo.animateEntrance
 import com.juren233.hyperlyricsenhanced.lyric.view.yoyo.animateUpdate
@@ -856,6 +857,13 @@ internal object IslandSlotContentAssembler {
             update(target)
             relayoutAfterDeferredContent(target, config)
         }
+        // 动画速率只作用于歌词切换动画：以所选样式内置时长为 1x 缩放出/入段；
+        // 优雅(1x)保持原样。间奏动画、第二行(下一句预览)上浮动画、入场揭示均不参与。
+        val switchPreset = if (config.switchAnimRateFactor != RootConstants.SWITCH_ANIM_RATE_ELEGANT_FACTOR) {
+            preset.scaleDurations(config.switchAnimRateFactor)
+        } else {
+            preset
+        }
         when (view) {
             is RichLyricLineView -> if (entranceOnly) {
                 view.animateEntrance(preset) { update(this) }
@@ -863,16 +871,29 @@ internal object IslandSlotContentAssembler {
                 // 动态长度：淡出期间冻结组宽，旧句对唱位置保持到新内容落地，
                 // 避免“旧句先移到另一侧再换字”。
                 view.beginContentSwitchFreeze()
-                view.animateUpdate(preset) { animatedUpdate(this) }
+                view.animateUpdate(switchPreset) { animatedUpdate(this) }
             }
             is SpaceGateRichLyricLineView -> if (entranceOnly) {
                 view.animateEntrance(preset) { update(this) }
             } else {
                 view.beginContentSwitchFreeze()
-                view.animateUpdate(preset) { animatedUpdate(this) }
+                view.animateUpdate(switchPreset) { animatedUpdate(this) }
             }
             else -> update(view)
         }
+    }
+
+    /**
+     * 样式出/入两段时长等比缩放到速率倍率（各样式内置时长为 1x）；
+     * 下限 1ms，防止极小倍率时零时长动画回调路径异常。
+     */
+    private fun Pair<AnimConfig, AnimConfig>.scaleDurations(factor: Float): Pair<AnimConfig, AnimConfig> {
+        fun scale(config: AnimConfig) = AnimConfig(
+            technique = config.technique,
+            duration = (config.duration * factor).toLong().coerceAtLeast(1L),
+            interpolator = config.interpolator
+        )
+        return scale(first) to scale(second)
     }
 
     /**

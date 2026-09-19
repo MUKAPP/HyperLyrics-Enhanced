@@ -212,6 +212,8 @@ object RootConstants {
     const val KEY_HOOK_ANIM_MODE = "key_hook_anim_mode"
     const val KEY_HOOK_ANIM_ENABLE = "key_hook_anim_enable"
     const val KEY_HOOK_ANIM_ID = "key_hook_anim_id"
+    const val KEY_HOOK_SWITCH_ANIM_RATE = "key_hook_switch_anim_rate"
+    const val KEY_HOOK_SWITCH_ANIM_CUSTOM_RATE = "key_hook_switch_anim_custom_rate"
     const val KEY_HOOK_MARQUEE_MODE = "key_hook_marquee_mode"
     const val KEY_HOOK_MARQUEE_SPEED = "key_hook_marquee_speed"
     const val KEY_HOOK_MARQUEE_DELAY = "key_hook_marquee_delay"
@@ -568,6 +570,29 @@ object RootConstants {
 
     const val DEFAULT_HOOK_ANIM_ENABLE = false
     const val DEFAULT_HOOK_ANIM_ID = "yoyo_default"
+
+    // 换句动画速率：只作用于歌词切换动画（所选样式的出/入段），以各样式内置时长为 1x 基准。
+    // 优雅=1x 保持现状，适中=0.7x，迅速=0.4x，自定义=用户输入倍率(0.1~5.0)。
+    // 间奏动画、第二行(下一句预览)上浮动画、入场揭示等均不随速率变化。
+    const val SWITCH_ANIM_RATE_SWIFT = "swift"
+    const val SWITCH_ANIM_RATE_MODERATE = "moderate"
+    const val SWITCH_ANIM_RATE_ELEGANT = "elegant"
+    const val SWITCH_ANIM_RATE_CUSTOM = "custom"
+    const val SWITCH_ANIM_RATE_SWIFT_FACTOR = 0.4f
+    const val SWITCH_ANIM_RATE_MODERATE_FACTOR = 0.7f
+    const val SWITCH_ANIM_RATE_ELEGANT_FACTOR = 1.0f
+    const val SWITCH_ANIM_CUSTOM_RATE_MIN = 0.1f
+    const val SWITCH_ANIM_CUSTOM_RATE_MAX = 5.0f
+    const val DEFAULT_HOOK_SWITCH_ANIM_RATE = SWITCH_ANIM_RATE_ELEGANT
+    const val DEFAULT_HOOK_SWITCH_ANIM_CUSTOM_RATE = 1.0f
+
+    /** 速率档位解析为倍率：迅速=0.4x、适中=0.7x、优雅=1x、自定义=用户输入(夹紧 0.1~5.0)。 */
+    fun resolveSwitchAnimRateFactor(rate: String?, customRate: Float): Float = when (rate) {
+        SWITCH_ANIM_RATE_SWIFT -> SWITCH_ANIM_RATE_SWIFT_FACTOR
+        SWITCH_ANIM_RATE_MODERATE -> SWITCH_ANIM_RATE_MODERATE_FACTOR
+        SWITCH_ANIM_RATE_CUSTOM -> customRate.coerceIn(SWITCH_ANIM_CUSTOM_RATE_MIN, SWITCH_ANIM_CUSTOM_RATE_MAX)
+        else -> SWITCH_ANIM_RATE_ELEGANT_FACTOR
+    }
     const val DEFAULT_HOOK_MARQUEE_MODE = false
     const val DEFAULT_HOOK_MARQUEE_SPEED = 30
     const val DEFAULT_HOOK_MARQUEE_DELAY = 1500

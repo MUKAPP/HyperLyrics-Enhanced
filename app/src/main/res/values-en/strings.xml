@@ -373,6 +373,13 @@
     <!-- ———————————————————————— LyricAnimationPage ———————————————————————— -->
     <string name="option_anim_none">No Animation</string>
     <string name="option_anim_default">Default</string>
+    <string name="title_switch_anim_rate">Animation Speed</string>
+    <string name="option_switch_anim_rate_swift">Swift</string>
+    <string name="option_switch_anim_rate_moderate">Moderate</string>
+    <string name="option_switch_anim_rate_elegant">Elegant</string>
+    <string name="option_switch_anim_rate_custom">Custom</string>
+    <string name="title_switch_anim_custom_rate">Custom Multiplier</string>
+    <string name="label_switch_anim_custom_rate_range">Multiplier range: 0.1–5.0</string>
     <string name="option_anim_fade">Fade</string>
     <string name="option_anim_fade_up">Fade Up</string>
     <string name="option_anim_fade_down">Fade Down</string>

@@ -116,6 +116,8 @@ class HookEntry : XposedModule() {
             RootConstants.KEY_HOOK_CENTER_GROUP_VOCALS,
             RootConstants.KEY_HOOK_ANIM_ENABLE,
             RootConstants.KEY_HOOK_ANIM_ID,
+            RootConstants.KEY_HOOK_SWITCH_ANIM_RATE,
+            RootConstants.KEY_HOOK_SWITCH_ANIM_CUSTOM_RATE,
             RootConstants.KEY_HOOK_MARQUEE_MODE,
             RootConstants.KEY_HOOK_MARQUEE_SPEED,
             RootConstants.KEY_HOOK_MARQUEE_DELAY,
