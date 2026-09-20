@@ -17,9 +17,11 @@ import com.juren233.hyperlyricsenhanced.root.island.IslandLyricTextInjector
 import com.juren233.hyperlyricsenhanced.root.island.IslandMusicWaveColorHooker
 import com.juren233.hyperlyricsenhanced.root.island.IslandProbeUtils
 import com.juren233.hyperlyricsenhanced.root.island.IslandProgressGlowController
+import com.juren233.hyperlyricsenhanced.root.island.IslandReattachAssistant
 import com.juren233.hyperlyricsenhanced.root.island.IslandSlotContentAssembler
 import com.juren233.hyperlyricsenhanced.root.island.IslandSlotRuntimeConfig
 import com.juren233.hyperlyricsenhanced.root.island.IslandViewRegistry
+import com.juren233.hyperlyricsenhanced.root.island.IslandViewRecoveryPolicy
 import com.juren233.hyperlyricsenhanced.root.island.IslandViewHelper
 import com.juren233.hyperlyricsenhanced.root.island.NextSongPreviewPolicy
 import com.juren233.hyperlyricsenhanced.root.utils.DisplayDiagnosticLogger
@@ -162,6 +164,10 @@ object BaseIslandRenderer : IslandRenderer {
             synchronized(nextSongPreviewFailures) { nextSongPreviewFailures.clear() }
         }
         val activeViews = IslandViewRegistry.snapshotAttached(lyricPkg)
+        if (activeViews.isEmpty() && IslandReattachAssistant.tryReattach(lyricPkg)) {
+            // 重挂后 register() 已安排补发刷新，本次直接返回避免竞态双写。
+            return
+        }
         if (activeViews.isEmpty()) {
             DisplayDiagnosticLogger.log("ISLAND", "skipped", "no_attached_view")
             return
@@ -191,7 +197,7 @@ object BaseIslandRenderer : IslandRenderer {
                 if (refreshWidth || (config.dynamicWidthEnabled && contentChanged)) {
                     IslandHostFacade.triggerSystemRelayout(cv)
                 }
-                val injected = IslandLyricTextInjector.hasInjectedLyricText(cv)
+                val injected = IslandLyricTextInjector.hasInjectedLyricView(cv)
                 DisplayDiagnosticLogger.log(
                     channel = "ISLAND",
                     result = if (injected) "shown" else "skipped",
@@ -235,24 +241,50 @@ object BaseIslandRenderer : IslandRenderer {
         val config = IslandSlotRuntimeConfig.from(prefs)
 
         val activeViews = IslandViewRegistry.snapshotAttached(lyricPkg)
+        if (activeViews.isEmpty() && IslandReattachAssistant.tryReattach(lyricPkg)) {
+            // 重挂后 register() 已安排补发刷新，本次直接返回避免竞态双写。
+            return
+        }
         if (activeViews.isEmpty()) {
             DisplayDiagnosticLogger.log("ISLAND", "skipped", "no_attached_view")
             return
         }
         activeViews.forEach { (cv, _) ->
                 cv.post {
-                    if (!IslandLyricTextInjector.hasInjectedLyricText(cv)) {
+                    val recoveryAction = IslandViewRecoveryPolicy.decide(
+                        hasRegisteredHost = true,
+                        hasInjectedView = IslandLyricTextInjector.hasInjectedLyricView(cv),
+                    )
+                    var injectionRecovered = false
+                    if (recoveryAction == IslandViewRecoveryPolicy.Action.REINJECT_REGISTERED_HOST) {
+                        val injectionChanged = IslandLyricTextInjector.injectSlots(
+                            cv,
+                            reconfigureExisting = false,
+                            suppressAnimation = true,
+                        )
+                        injectionRecovered = IslandLyricTextInjector.hasInjectedLyricView(cv)
+                        if (!injectionRecovered) {
+                            DisplayDiagnosticLogger.log(
+                                channel = "ISLAND",
+                                result = "skipped",
+                                reason = "injected_view_recovery_failed",
+                                extra = "targetViews=${activeViews.size}, injectionChanged=$injectionChanged",
+                                dedupeKey = "ISLAND/line",
+                            )
+                            return@post
+                        }
                         DisplayDiagnosticLogger.log(
                             channel = "ISLAND",
-                            result = "skipped",
-                            reason = "injected_view_missing",
-                            extra = "targetViews=${activeViews.size}",
+                            result = "shown",
+                            reason = "injected_view_recovered",
+                            extra = "targetViews=${activeViews.size}, injectionChanged=$injectionChanged",
                             dedupeKey = "ISLAND/line",
                         )
-                        return@post
                     }
                     val contentChanged = updateLyricContentForView(cv, prefs, config)
-                    if (config.dynamicWidthEnabled && contentChanged) {
+                    if (injectionRecovered) {
+                        IslandHostFacade.triggerSystemRelayout(cv)
+                    } else if (config.dynamicWidthEnabled && contentChanged) {
                         IslandHostFacade.triggerLyricContentRelayout(cv)
                     }
                     DisplayDiagnosticLogger.log(

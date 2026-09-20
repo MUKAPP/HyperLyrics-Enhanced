@@ -30,6 +30,7 @@ internal enum class AppleMusicHookPoint {
     MEDIA_API_LOCALIZATION,
     CONTENT_HTTP_LOCALIZATION,
     EXO_MEDIA_PLAYER,
+    EXO_PLAYER_STATE_CHANGED,
     EXO_AUDIO_SESSION_ID,
     LOCAL_MEDIA_PLAYER_CONTROLLER_STATE,
     LOCAL_MEDIA_PLAYER_AUDIO_VARIANT_CHANGED,
@@ -505,7 +506,7 @@ internal object AppleMusicHookProfiles {
             ),
         ) + stableMetadataSurfaceHookTargets() +
             stableLibrarySurfaceHookTargets() + stableLyricsHookTargets() +
-            stableAtmosDiagnosticHookTargets(),
+            stableAtmosDiagnosticHookTargets() + stablePlaybackStateHookTargets(),
     )
 
     private val APPLE_MUSIC_6_5_2 = AppleMusicHookProfile(
@@ -708,7 +709,8 @@ internal object AppleMusicHookProfiles {
                     returnTypeName = "void",
                 ),
             ),
-        ) + stableAtmosDiagnosticHookTargets() + atmosLoudnessMetadataHookTargets(),
+        ) + stableAtmosDiagnosticHookTargets() + atmosLoudnessMetadataHookTargets() +
+            stablePlaybackStateHookTargets(),
     )
 
     private val APPLE_MUSIC_6_5_3 by lazy { appleMusic653Profile() }
@@ -1316,7 +1318,7 @@ internal object AppleMusicHookProfiles {
             ),
         ) + stableMetadataSurfaceHookTargets() +
             stableLibrarySurfaceHookTargets() + stableLyricsHookTargets() +
-            stableAtmosDiagnosticHookTargets(),
+            stableAtmosDiagnosticHookTargets() + stablePlaybackStateHookTargets(),
     )
 
     /**
@@ -2013,6 +2015,30 @@ internal object AppleMusicHookProfiles {
         parameterTypeNames = listOf("int"),
         returnTypeName = "void",
         isStatic = false,
+    )
+
+    /**
+     * Original DEX descriptor verified on Apple Music 6.5.0 (1580), 6.5.1 (1583),
+     * 6.5.2 (1586), and 6.5.3 (1599):
+     *
+     * `Lcom/apple/android/music/playback/player/ExoMediaPlayer;`
+     * `->onPlayerStateChanged(ZI)V`.
+     *
+     * The first argument is ExoPlayer `playWhenReady`; the second is the raw ExoPlayer
+     * state (`1=IDLE, 2=BUFFERING, 3=READY, 4=ENDED`). This exact binary callback is the
+     * authoritative distinction between buffering (`true,2`) and user pause (`false,*`).
+     */
+    private fun stablePlaybackStateHookTargets() = mapOf(
+        AppleMusicHookPoint.EXO_PLAYER_STATE_CHANGED to listOf(
+            AppleMusicHookTarget(
+                className = "com.apple.android.music.playback.player.ExoMediaPlayer",
+                methodName = "onPlayerStateChanged",
+                parameterCount = 2,
+                parameterTypeNames = listOf("boolean", "int"),
+                returnTypeName = "void",
+                isStatic = false,
+            ),
+        ),
     )
 
     private fun localMediaPlayerControllerStateTarget() = AppleMusicHookTarget(
@@ -3101,6 +3127,7 @@ internal class AppleMusicHookResolver(
             AppleMusicHookPoint.CELLULAR_AVAILABILITY,
             AppleMusicHookPoint.CONTENT_HTTP_LOCALIZATION,
             AppleMusicHookPoint.EXO_MEDIA_PLAYER,
+            AppleMusicHookPoint.EXO_PLAYER_STATE_CHANGED,
             AppleMusicHookPoint.EXO_AUDIO_SESSION_ID,
             AppleMusicHookPoint.LOCAL_MEDIA_PLAYER_CONTROLLER_STATE,
             AppleMusicHookPoint.LOCAL_MEDIA_PLAYER_AUDIO_VARIANT_CHANGED,

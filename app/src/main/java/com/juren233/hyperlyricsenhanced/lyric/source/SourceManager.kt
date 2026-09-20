@@ -10,7 +10,6 @@ class SourceManager(
     private val sink: LyricSink,
     private val prefKey: String,
     private val defaultSourceId: String,
-    private val stateResetter: StateResetter,
     private val logger: HyperLogger
 ) {
     private var activeSource: LyricSource? = null
@@ -39,8 +38,9 @@ class SourceManager(
         }
 
         activeSource = source
+        (sink as? SourceSelectionAwareSink)?.onSourceSelected(source.id)
         logger.i("SourceManager", "启动歌词源: ${source.displayName}")
-        source.start(sink)
+        source.start(contentOnlySink(source.id))
         diagnostic("stage=start_returned, active=${source.id}/${source.displayName}")
     }
 
@@ -59,17 +59,23 @@ class SourceManager(
         }
 
         current?.stop()
-        stateResetter.clearState()
+        current?.let { (sink as? SourceSelectionAwareSink)?.onSourceStopped(it.id) }
+        activeSource = null
 
         val source = sources.find { it.id == sourceId && it.isAvailable() }
+            ?: sources.firstOrNull { it.isAvailable() }
         if (source == null) {
             logger.w("SourceManager", "歌词源不可用: $sourceId")
             return
         }
+        if (source.id != sourceId) {
+            logger.w("SourceManager", "歌词源不可用，回退到: ${source.displayName}")
+        }
 
         activeSource = source
+        (sink as? SourceSelectionAwareSink)?.onSourceSelected(source.id)
         logger.i("SourceManager", "切换歌词源: ${source.displayName}")
-        source.start(sink)
+        source.start(contentOnlySink(source.id))
         diagnostic("stage=switch_returned, active=${source.id}/${source.displayName}")
     }
 
@@ -80,10 +86,19 @@ class SourceManager(
             "stage=stop_requested, " +
                 "current=${activeSource?.id}/${activeSource?.displayName}",
         )
-        activeSource?.stop()
+        val current = activeSource
+        current?.stop()
+        current?.let { (sink as? SourceSelectionAwareSink)?.onSourceStopped(it.id) }
         activeSource = null
         diagnostic("stage=stop_completed")
     }
+
+    /** 停止来源的迟到回调也会因活动来源身份不匹配而被拒绝。 */
+    private fun contentOnlySink(sourceId: String): LyricSink = ContentOnlySourceSink(
+        sourceId = sourceId,
+        isActive = { activeSource?.id == it },
+        delegate = sink,
+    )
 
     private fun diagnostic(message: String) {
         if (BuildConfig.DEBUG) logger.i("SourceManager", "[debug] $message")

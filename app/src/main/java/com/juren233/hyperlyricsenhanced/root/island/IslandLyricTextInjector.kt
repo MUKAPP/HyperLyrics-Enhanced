@@ -167,6 +167,12 @@ internal object IslandLyricTextInjector {
             rootView.findViewWithTag<View>(IslandProbeUtils.RIGHT_TEST_VIEW_TAG) != null
     }
 
+    /** wrapper 仍在但真正歌词 View 已被系统重建移除时，也必须判定为需要重新注入。 */
+    fun hasInjectedLyricView(rootView: ViewGroup): Boolean {
+        return rootView.findViewWithTag<View>(IslandProbeUtils.LEFT_TEST_VIEW_TAG) != null ||
+            rootView.findViewWithTag<View>(IslandProbeUtils.RIGHT_TEST_VIEW_TAG) != null
+    }
+
     fun hasVisibleInjectedContent(rootView: ViewGroup): Boolean {
         fun isVisible(tag: String): Boolean {
             return rootView.findViewWithTag<View>(tag)

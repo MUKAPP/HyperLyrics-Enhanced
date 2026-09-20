@@ -291,10 +291,20 @@ internal class ActivePlayerCoordinator(
                         ProviderSourcePriorityResolver.resolve(currentInfo).rank
                     )
                 }
+                // Cross-app handoff must not wait for the old player to publish PAUSED. In real
+                // devices the new player's playback-state edge and actual audio output arrive
+                // first, while the old Provider can retain isPlaying=true for ~2 seconds. Only a
+                // playback-state event may use this fast path; song/position traffic is not an
+                // ownership signal and therefore cannot oscillate the active player.
+                val confirmedPlaybackTakeover = !samePlayer &&
+                    reportsPlaybackState &&
+                    recorderPlaying &&
+                    audioConflict == false
                 val canSwitch = when {
                     currentInfo == null -> true
                     samePlayer && priorityComparison > 0 -> true
                     samePlayer && priorityComparison < 0 -> false
+                    confirmedPlaybackTakeover -> true
                     else -> !activeIsPlaying && recorderPlaying
                 }
                 if (canSwitch) {
@@ -305,6 +315,7 @@ internal class ActivePlayerCoordinator(
                     decision = when {
                         currentInfo == null -> "switched_no_active"
                         samePlayer && priorityComparison > 0 -> "switched_higher_priority"
+                        confirmedPlaybackTakeover -> "switched_confirmed_playback_takeover"
                         else -> "switched_playback_state"
                     }
                 } else {

@@ -8,6 +8,7 @@ package io.github.proify.lyricon.amprovider.xposed.hooks
 
 import android.media.AudioRouting
 import android.media.AudioTrack
+import android.media.session.MediaSession
 import android.media.session.PlaybackState as AndroidPlaybackState
 import android.os.SystemClock
 import com.juren233.hyperlyricsenhanced.BuildConfig
@@ -51,7 +52,12 @@ internal class ApplePlaybackHooks(
     private val coroutineScope by lazy { CoroutineScope(Dispatchers.Default + SupervisorJob()) }
     private var progressJob: Job? = null
     private var remotePlayer: RemotePlayer? = null
+    /** Playback surface activity. BUFFERING remains active. */
     private var playing = false
+    /** True only while the media clock may advance. BUFFERING is false. */
+    private var timelineAdvancing = false
+    private val exoPlaybackSignals =
+        WeakIdentityMap<Any, AppleExoPlaybackIntentPolicy.Resolution>()
     private var zeroPositionReadCount = 0
     private var hasLoggedNonZeroPosition = false
     private var lastTimingSamplePosition = -1L
@@ -63,6 +69,8 @@ internal class ApplePlaybackHooks(
     private var lastPlaybackAnchorAtMs = 0L
     private val atmosphereSessionCallbackHit = AtomicBoolean(false)
     private val atmosphereVariantCallbackHit = AtomicBoolean(false)
+    private val exoPlayerStateCallbackHit = AtomicBoolean(false)
+    private val mediaSessionStateCallbackHit = AtomicBoolean(false)
     private val atmosphereVolumeProcessor = AppleAtmosVolumeProcessor(isVolumeBalanceEnabled)
     private val atmosphereLoudnessMetadataHooks = AppleAtmosLoudnessMetadataHooks(runtime)
     private val atmospherePcmMonitor = AppleAtmosPcmMonitor(
@@ -93,23 +101,23 @@ internal class ApplePlaybackHooks(
         ScreenStateMonitor.initialize(runtime.application)
         ScreenStateMonitor.addListener(object : ScreenStateMonitor.ScreenStateListener {
             override fun onScreenOn() {
-                if (playing) resumeCoroutineTask()
+                if (timelineAdvancing) resumeCoroutineTask()
             }
 
             override fun onScreenOff() {
-                if (playing && isAodLyricsEnabled()) resumeCoroutineTask()
+                if (timelineAdvancing && isAodLyricsEnabled()) resumeCoroutineTask()
                 else pauseCoroutineTask()
             }
 
             override fun onScreenUnlocked() {
-                if (playing && progressJob == null) resumeCoroutineTask()
+                if (timelineAdvancing && progressJob == null) resumeCoroutineTask()
             }
         })
     }
 
     fun onAodPreferenceChanged() {
         if (ScreenStateMonitor.state != ScreenStateMonitor.ScreenState.OFF) return
-        if (playing && isAodLyricsEnabled()) resumeCoroutineTask()
+        if (timelineAdvancing && isAodLyricsEnabled()) resumeCoroutineTask()
         else pauseCoroutineTask()
     }
 
@@ -130,6 +138,21 @@ internal class ApplePlaybackHooks(
                 )
             })
         }
+        val playerStateTarget = runtime.hookResolver.resolveMethod(
+            AppleMusicHookPoint.EXO_PLAYER_STATE_CHANGED
+        )
+        runtime.hookRegistrar.installHook(playerStateTarget.method, after = { chain, _ ->
+            val player = chain.thisObject ?: return@installHook
+            val playWhenReady = chain.args.getOrNull(0) as? Boolean ?: return@installHook
+            val state = chain.args.getOrNull(1) as? Int ?: return@installHook
+            onExoPlayerStateChanged(player, playWhenReady, state)
+        })
+        ProviderLogger.info(
+            "Apple Music Exo 播放意图 Hook 已安装: " +
+                "${playerStateTarget.method.declaringClass.name}#" +
+                "${playerStateTarget.method.name}(boolean,int)"
+        )
+        hookPlatformMediaSessionPlaybackState()
         hookExoPlaybackLifecycle(exoPlayerClass)
         hookAtmosVolumeBalance()
 
@@ -175,7 +198,18 @@ internal class ApplePlaybackHooks(
                     startSyncAction()
                 }
                 else -> {
-                    if (activePlaybackPlayer === activeMediaPlayer) stopSyncAction()
+                    if (activePlaybackPlayer === activeMediaPlayer) {
+                        val signal = activeMediaPlayer?.let(exoPlaybackSignals::get)
+                        if (signal?.playbackActive == true) {
+                            applyExoPlaybackResolution(
+                                player = activeMediaPlayer,
+                                resolution = signal,
+                                source = "LocalMediaPlayerController.retained_exo_intent",
+                            )
+                        } else {
+                            stopSyncAction()
+                        }
+                    }
                 }
             }
         })
@@ -190,14 +224,16 @@ internal class ApplePlaybackHooks(
             ?: lastTimingSamplePosition.takeIf { it >= 0L }
 
     private fun startSyncAction() {
-        if (playing) return
+        if (playing && timelineAdvancing) return
         playing = true
+        timelineAdvancing = true
         currentPositionMs()?.let { publishPlaybackAnchor(it, playing = true, force = true) }
         resumeCoroutineTask()
     }
 
     private fun stopSyncAction() {
         playing = false
+        timelineAdvancing = false
         currentPositionMs()?.let { publishPlaybackAnchor(it, playing = false, force = true) }
             ?: remotePlayer?.setPlaybackState(false)
         pauseCoroutineTask()
@@ -206,7 +242,7 @@ internal class ApplePlaybackHooks(
     private fun resumeCoroutineTask() {
         if (progressJob?.isActive == true) return
         progressJob = coroutineScope.launch {
-            while (isActive && playing) {
+            while (isActive && timelineAdvancing) {
                 runCatching {
                     playbackPositionSource?.readPosition()?.let { position ->
                         logPositionSyncState(position)
@@ -247,7 +283,15 @@ internal class ApplePlaybackHooks(
                 methodName,
                 parameterCount = 0,
             )
-            runtime.hookRegistrar.installHook(method, after = { chain, _ ->
+            runtime.hookRegistrar.installHook(
+                method,
+                before = { chain ->
+                    // The platform MediaSession PAUSED publication can happen inside these
+                    // methods. Remove retained play intent before the original call so an
+                    // explicit pause/stop/release is never rewritten as BUFFERING.
+                    chain.thisObject?.let(exoPlaybackSignals::remove)
+                },
+                after = { chain, _ ->
                 if (runtimeMember == AppleMusicRuntimeMember.EXO_RELEASE_METHOD) {
                     chain.thisObject?.let(atmosphereVolumeProcessor::onPlayerReleased)
                 }
@@ -260,9 +304,112 @@ internal class ApplePlaybackHooks(
                         }
                     }
                 }
-            })
+                },
+            )
         }
         ProviderLogger.info("Apple Music 播放生命周期 Hook 已安装")
+    }
+
+    private fun hookPlatformMediaSessionPlaybackState() {
+        val method = MediaSession::class.java.getDeclaredMethod(
+            "setPlaybackState",
+            AndroidPlaybackState::class.java,
+        )
+        runtime.hookRegistrar.installArgumentRewriteHook(method) { chain ->
+            val incoming = chain.args.firstOrNull() as? AndroidPlaybackState
+                ?: return@installArgumentRewriteHook null
+            val activePlayer = activePlaybackPlayer
+            val activeResolution = activePlayer?.let(exoPlaybackSignals::get)
+            if (BuildConfig.DEBUG && mediaSessionStateCallbackHit.compareAndSet(false, true)) {
+                ProviderLogger.diagnostic(
+                    "Apple MediaSession 播放态首次回调: state=${incoming.state}, " +
+                        "position=${incoming.position}, activePlayer=" +
+                        "${activePlayer?.let(System::identityHashCode)}, " +
+                        "exoPublication=${activeResolution?.publication}, " +
+                        "exoActive=${activeResolution?.playbackActive}"
+                )
+            }
+            val decision = AppleExoPlaybackIntentPolicy.decideMediaSessionPause(
+                incomingPaused = incoming.state == AndroidPlaybackState.STATE_PAUSED,
+                activeResolution = activeResolution,
+            )
+            if (decision != AppleExoPlaybackIntentPolicy.MediaSessionPauseDecision.REWRITE_BUFFERING) {
+                return@installArgumentRewriteHook null
+            }
+
+            val rewritten = AndroidPlaybackState.Builder(incoming)
+                .setState(
+                    AndroidPlaybackState.STATE_BUFFERING,
+                    incoming.position,
+                    0.0f,
+                    incoming.lastPositionUpdateTime.takeIf { it > 0L }
+                        ?: SystemClock.elapsedRealtime(),
+                )
+                .build()
+            if (BuildConfig.DEBUG) {
+                ProviderLogger.diagnostic(
+                    "Apple MediaSession 假暂停已改写: original=PAUSED, " +
+                        "replacement=BUFFERING, position=${incoming.position}, " +
+                        "activePlayer=${activePlayer?.let(System::identityHashCode)}, " +
+                        "exoPublication=${activeResolution?.publication}"
+                )
+            }
+            arrayOf(rewritten)
+        }
+        ProviderLogger.info(
+            "Apple Music 系统 MediaSession 缓冲态 Hook 已安装: " +
+                "${method.declaringClass.name}#${method.name}(PlaybackState)"
+        )
+    }
+
+    private fun onExoPlayerStateChanged(
+        player: Any,
+        playWhenReady: Boolean,
+        state: Int,
+    ) {
+        val resolution = AppleExoPlaybackIntentPolicy.resolve(playWhenReady, state)
+        exoPlaybackSignals[player] = resolution
+        if (BuildConfig.DEBUG && exoPlayerStateCallbackHit.compareAndSet(false, true)) {
+            ProviderLogger.diagnostic(
+                "Exo 播放意图首次回调: player=${System.identityHashCode(player)}, " +
+                    "playWhenReady=$playWhenReady, state=$state, " +
+                    "publication=${resolution.publication}"
+            )
+        }
+        if (resolution.playbackActive && activePlaybackPlayer !== player) {
+            activatePlaybackPlayer(player, "ExoMediaPlayer.onPlayerStateChanged")
+            refreshCurrentQueueItem(player, "onPlayerStateChanged")
+        }
+        if (activePlaybackPlayer !== player) return
+        applyExoPlaybackResolution(
+            player = player,
+            resolution = resolution,
+            source = "ExoMediaPlayer.onPlayerStateChanged",
+        )
+    }
+
+    private fun applyExoPlaybackResolution(
+        player: Any,
+        resolution: AppleExoPlaybackIntentPolicy.Resolution,
+        source: String,
+    ) {
+        if (activePlaybackPlayer !== player) return
+        playing = resolution.playbackActive
+        timelineAdvancing = resolution.advancesTimeline
+        val position = currentPositionMs()?.coerceAtLeast(0L) ?: 0L
+        publishPlaybackState(
+            position = position,
+            publication = resolution.publication,
+            force = true,
+        )
+        if (resolution.advancesTimeline) resumeCoroutineTask() else pauseCoroutineTask()
+        if (BuildConfig.DEBUG) {
+            ProviderLogger.diagnostic(
+                "Exo 播放意图发布: source=$source, player=${System.identityHashCode(player)}, " +
+                    "publication=${resolution.publication}, active=${resolution.playbackActive}, " +
+                    "advancing=${resolution.advancesTimeline}, position=$position"
+            )
+        }
     }
 
     private fun hookAtmosVolumeBalance() {
@@ -558,23 +705,47 @@ internal class ApplePlaybackHooks(
     }
 
     private fun publishPlaybackAnchor(position: Long, playing: Boolean, force: Boolean) {
+        publishPlaybackState(
+            position = position,
+            publication = if (playing) {
+                AppleExoPlaybackIntentPolicy.Publication.PLAYING
+            } else {
+                AppleExoPlaybackIntentPolicy.Publication.PAUSED
+            },
+            force = force,
+        )
+    }
+
+    private fun publishPlaybackState(
+        position: Long,
+        publication: AppleExoPlaybackIntentPolicy.Publication,
+        force: Boolean,
+    ) {
         val now = SystemClock.elapsedRealtime()
         if (!force && now - lastPlaybackAnchorAtMs < PLAYBACK_ANCHOR_INTERVAL_MS) return
 
         lastPlaybackAnchorAtMs = now
+        val androidState = when (publication) {
+            AppleExoPlaybackIntentPolicy.Publication.PLAYING ->
+                AndroidPlaybackState.STATE_PLAYING
+            AppleExoPlaybackIntentPolicy.Publication.BUFFERING ->
+                AndroidPlaybackState.STATE_BUFFERING
+            AppleExoPlaybackIntentPolicy.Publication.PAUSED ->
+                AndroidPlaybackState.STATE_PAUSED
+        }
         val state = AndroidPlaybackState.Builder()
             .setState(
-                if (playing) AndroidPlaybackState.STATE_PLAYING
-                else AndroidPlaybackState.STATE_PAUSED,
+                androidState,
                 position.coerceAtLeast(0L),
-                if (playing) 1.0f else 0.0f,
+                if (publication == AppleExoPlaybackIntentPolicy.Publication.PLAYING) 1.0f
+                else 0.0f,
                 now,
             )
             .build()
         val success = remotePlayer?.setPlaybackState(state) == true
         if (BuildConfig.DEBUG) {
             ProviderLogger.diagnostic(
-                "Timing playback anchor: position=$position, playing=$playing, " +
+                "Timing playback anchor: position=$position, publication=$publication, " +
                     "force=$force, success=$success"
             )
         }

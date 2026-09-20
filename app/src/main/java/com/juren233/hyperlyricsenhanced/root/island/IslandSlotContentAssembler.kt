@@ -26,6 +26,7 @@ import com.juren233.hyperlyricsenhanced.lyric.view.yoyo.AnimConfig
 import com.juren233.hyperlyricsenhanced.lyric.view.yoyo.YoYoPresets
 import com.juren233.hyperlyricsenhanced.lyric.view.yoyo.animateEntrance
 import com.juren233.hyperlyricsenhanced.lyric.view.yoyo.animateUpdate
+import com.juren233.hyperlyricsenhanced.provider.OfficialProviderCatalog
 import com.juren233.hyperlyricsenhanced.root.LyriconDataBridge
 import com.juren233.hyperlyricsenhanced.root.utils.CoverColorHelper
 import com.juren233.hyperlyricsenhanced.root.utils.CoverColorDiagnostics
@@ -243,7 +244,7 @@ internal object IslandSlotContentAssembler {
         return if (mode == 7) {
             applyLyricContent(view, prefs, config, lineOverride, force, playbackActive, suppressAnimation)
         } else {
-            applyMetadataContent(view, config, mode, force, mediaInfo, suppressAnimation)
+            applyMetadataContent(view, prefs, config, mode, force, mediaInfo, suppressAnimation)
         }
     }
 
@@ -718,20 +719,30 @@ internal object IslandSlotContentAssembler {
 
     private fun applyMetadataContent(
         view: View,
+        prefs: SharedPreferences,
         config: IslandSlotRuntimeConfig,
         mode: Int,
         force: Boolean,
         mediaInfo: MediaMetadataHelper.MediaInfo,
         suppressAnimation: Boolean
     ): Boolean {
+        val preferSessionMetadata = shouldPreferMediaSessionMetadata(
+            packageName = LyriconDataBridge.currentLyricPackageName,
+            restoreOriginalMetadata = prefs.getBoolean(
+                RootConstants.KEY_HOOK_APPLE_MUSIC_RESTORE_CJK_ORIGINAL_METADATA,
+                RootConstants.DEFAULT_HOOK_APPLE_MUSIC_RESTORE_CJK_ORIGINAL_METADATA,
+            ),
+        )
         val songName = resolveMetadataSongName(
             lyricSongName = LyriconDataBridge.currentSong?.name,
             currentSongName = LyriconDataBridge.currentSongName,
-            mediaTitle = mediaInfo.title
+            mediaTitle = mediaInfo.title,
+            preferSessionMetadata = preferSessionMetadata,
         )
         val artistName = resolveMetadataArtistName(
             lyricArtist = LyriconDataBridge.currentSong?.artist,
-            mediaArtist = mediaInfo.artist
+            mediaArtist = mediaInfo.artist,
+            preferSessionMetadata = preferSessionMetadata,
         )
         val albumName = mediaInfo.album
         if (BuildConfig.DEBUG) AppleMetadataFlowDiagnostics.record("island_choice", changedOnly = true) {
@@ -739,7 +750,8 @@ internal object IslandSlotContentAssembler {
                 "providerArtist=${AppleMetadataFlowDiagnostics.text(LyriconDataBridge.currentSong?.artist)} " +
                 "mediaArtist=${AppleMetadataFlowDiagnostics.text(mediaInfo.artist)} " +
                 "selectedArtist=${AppleMetadataFlowDiagnostics.text(artistName)} " +
-                "selectedTitle=${AppleMetadataFlowDiagnostics.text(songName)}"
+                "selectedTitle=${AppleMetadataFlowDiagnostics.text(songName)} " +
+                "preferSessionMetadata=$preferSessionMetadata"
         }
 
         val signature = listOf(
@@ -781,21 +793,50 @@ internal object IslandSlotContentAssembler {
     internal fun resolveMetadataSongName(
         lyricSongName: String?,
         currentSongName: String?,
-        mediaTitle: String
-    ): String = lyricSongName?.takeIf { it.isNotBlank() }
-        ?: currentSongName?.takeIf { it.isNotBlank() }
-        ?: mediaTitle
+        mediaTitle: String,
+        preferSessionMetadata: Boolean = false,
+    ): String {
+        val anchorTitle = currentSongName?.takeIf {
+            it.isNotBlank() && it != UNKNOWN_MEDIA_TITLE
+        }
+        val sessionTitle = anchorTitle ?: mediaTitle.takeIf { it.isNotBlank() }
+        return if (preferSessionMetadata) {
+            sessionTitle
+                ?: lyricSongName?.takeIf { it.isNotBlank() }
+                ?: currentSongName?.takeIf { it.isNotBlank() }
+                ?: mediaTitle
+        } else {
+            lyricSongName?.takeIf { it.isNotBlank() }
+                ?: currentSongName?.takeIf { it.isNotBlank() }
+                ?: mediaTitle
+        }
+    }
 
     /**
-     * 与 resolveMetadataSongName 同一优先级链：Provider 发布的权威歌手优先，
-     * 媒体库原始值兜底。国内音乐 App 开启车载歌词时会把「歌名-歌手」组合串
-     * 写进 MediaSession 的歌手字段，只有桥内的 Provider 数据是干净的。
+     * 默认由 Provider 的干净歌手字段优先，避免国内音乐 App 的车载歌词把
+     * 「歌名-歌手」组合串写进 MediaSession。仅 Apple 原地区原名模式反转该优先级，
+     * 因为该模式已把最终原名写入 MediaSession，而 Provider 仍可能保留地区英文别名。
      */
     internal fun resolveMetadataArtistName(
         lyricArtist: String?,
-        mediaArtist: String
-    ): String = lyricArtist?.takeIf { it.isNotBlank() }
-        ?: mediaArtist
+        mediaArtist: String,
+        preferSessionMetadata: Boolean = false,
+    ): String = if (preferSessionMetadata) {
+        mediaArtist.takeIf { it.isNotBlank() }
+            ?: lyricArtist?.takeIf { it.isNotBlank() }
+            ?: mediaArtist
+    } else {
+        lyricArtist?.takeIf { it.isNotBlank() }
+            ?: mediaArtist
+    }
+
+    internal fun shouldPreferMediaSessionMetadata(
+        packageName: String?,
+        restoreOriginalMetadata: Boolean,
+    ): Boolean = restoreOriginalMetadata &&
+        packageName == OfficialProviderCatalog.APPLE_MUSIC_PACKAGE_NAME
+
+    private const val UNKNOWN_MEDIA_TITLE = "Playing~"
 
     internal fun buildMetadataLine(
         mode: Int,

@@ -151,6 +151,83 @@ class IslandSlotContentAssemblerTest {
     }
 
     @Test
+    fun `apple original metadata setting prefers session title over provider alias`() {
+        assertEquals(
+            "别问很可怕",
+            IslandSlotContentAssembler.resolveMetadataSongName(
+                lyricSongName = "Don't Ask",
+                currentSongName = "别问很可怕",
+                mediaTitle = "别问很可怕",
+                preferSessionMetadata = true,
+            ),
+        )
+        assertEquals(
+            "童话",
+            IslandSlotContentAssembler.resolveMetadataSongName(
+                lyricSongName = "Fairy Tale",
+                currentSongName = "Playing~",
+                mediaTitle = "童话",
+                preferSessionMetadata = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `apple original metadata setting prefers session artist over provider alias`() {
+        assertEquals(
+            "아이브",
+            IslandSlotContentAssembler.resolveMetadataArtistName(
+                lyricArtist = "IVE",
+                mediaArtist = "아이브",
+                preferSessionMetadata = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `blank session metadata falls back to provider while original metadata is enabled`() {
+        assertEquals(
+            "Fairy Tale",
+            IslandSlotContentAssembler.resolveMetadataSongName(
+                lyricSongName = "Fairy Tale",
+                currentSongName = "Playing~",
+                mediaTitle = "",
+                preferSessionMetadata = true,
+            ),
+        )
+        assertEquals(
+            "林宥嘉",
+            IslandSlotContentAssembler.resolveMetadataArtistName(
+                lyricArtist = "林宥嘉",
+                mediaArtist = "",
+                preferSessionMetadata = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `session metadata priority is limited to apple with original metadata enabled`() {
+        assertTrue(
+            IslandSlotContentAssembler.shouldPreferMediaSessionMetadata(
+                packageName = "com.apple.android.music",
+                restoreOriginalMetadata = true,
+            ),
+        )
+        assertFalse(
+            IslandSlotContentAssembler.shouldPreferMediaSessionMetadata(
+                packageName = "com.apple.android.music",
+                restoreOriginalMetadata = false,
+            ),
+        )
+        assertFalse(
+            IslandSlotContentAssembler.shouldPreferMediaSessionMetadata(
+                packageName = "com.miui.player",
+                restoreOriginalMetadata = true,
+            ),
+        )
+    }
+
+    @Test
     fun `real song title change still refreshes song info`() {
         val current = IslandSlotContentAssembler.buildMetadataLine(
             mode = 5,

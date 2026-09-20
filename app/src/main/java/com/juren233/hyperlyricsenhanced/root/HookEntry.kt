@@ -40,6 +40,8 @@ import com.juren233.hyperlyricsenhanced.root.source.onPreferenceChanged
 import com.juren233.hyperlyricsenhanced.root.source.LyricInfoSource
 import com.juren233.hyperlyricsenhanced.root.source.RootLyricSink
 import com.juren233.hyperlyricsenhanced.root.source.SuperLyricSource
+import com.juren233.hyperlyricsenhanced.root.timeline.LocalTimelineDriver
+import com.juren233.hyperlyricsenhanced.root.timeline.SystemMediaPlaybackAnchor
 import com.juren233.hyperlyricsenhanced.root.aitrans.AITranslator
 import com.juren233.hyperlyricsenhanced.root.utils.HookLogger
 import com.juren233.hyperlyricsenhanced.root.utils.RuntimePerfDiagnostics
@@ -159,6 +161,8 @@ class HookEntry : XposedModule() {
     private var prefListener: android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
     private var preferenceBroadcastReceiver: BroadcastReceiver? = null
     private var runtimeApp: Application? = null
+    private var playbackAnchor: SystemMediaPlaybackAnchor? = null
+    private var localTimelineDriver: LocalTimelineDriver? = null
     private var lyricsOnlyAfterHotReload = false
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private var pendingSystemMediaProviderRefresh: Runnable? = null
@@ -434,15 +438,21 @@ class HookEntry : XposedModule() {
             superLyricSource.initialize(app)
             lyricInfoSource = LyricInfoSource(app)
 
+            // SystemUI 唯一时间轴。来源只提交歌词内容；媒体锚点负责播放状态、位置与滚动。
+            val anchor = SystemMediaPlaybackAnchor(app)
+            playbackAnchor = anchor
+            val driver = LocalTimelineDriver(anchor, sink)
+            localTimelineDriver = driver
+            driver.start()
+
             AITranslator.init(app)
 
             sourceManager = SourceManager(
                 sources = listOf(lyriconSource, superLyricSource, lyricInfoSource!!),
                 prefs = prefs,
-                sink = sink,
+                sink = driver,
                 prefKey = RootConstants.KEY_HOOK_LYRIC_SOURCE,
                 defaultSourceId = RootConstants.DEFAULT_HOOK_LYRIC_SOURCE,
-                stateResetter = LyriconDataBridge,
                 logger = HookLogger
             )
             activeMode = prefs.getInt(
@@ -715,9 +725,8 @@ class HookEntry : XposedModule() {
             sourceManager?.start()
         } else {
             sourceManager?.stop()
+            localTimelineDriver?.stopDriving()
             AITranslator.cancelActiveRequests()
-            LyriconDataBridge.clearState()
-            BaseIslandRenderer.clearAllViews()
             IslandProgressGlowController.clearAll()
         }
 
@@ -766,6 +775,10 @@ class HookEntry : XposedModule() {
         AITranslator.cancelActiveRequests()
         sourceManager = null
         lyricInfoSource = null
+        localTimelineDriver?.stop()
+        localTimelineDriver = null
+        playbackAnchor?.stop()
+        playbackAnchor = null
         runtimeApp = null
     }
 

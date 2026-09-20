@@ -762,6 +762,16 @@ class AppleMusicHookProfilesTest {
             exo.runtimeMemberName(AppleMusicRuntimeMember.EXO_CURRENT_POSITION_METHOD),
         )
 
+        val playerState = target(version, AppleMusicHookPoint.EXO_PLAYER_STATE_CHANGED)
+        assertEquals(
+            "com.apple.android.music.playback.player.ExoMediaPlayer",
+            playerState.className,
+        )
+        assertEquals("onPlayerStateChanged", playerState.methodName)
+        assertEquals(listOf("boolean", "int"), playerState.parameterTypeNames)
+        assertEquals("void", playerState.returnTypeName)
+        assertEquals(false, playerState.isStatic)
+
         val audioSession = target(version, AppleMusicHookPoint.EXO_AUDIO_SESSION_ID)
         assertEquals("com.apple.android.music.playback.player.ExoMediaPlayer", audioSession.className)
         assertEquals("onAudioSessionId", audioSession.methodName)
