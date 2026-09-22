@@ -130,6 +130,10 @@ internal enum class AppleMusicRuntimeMember {
     EXO_STOP_METHOD,
     EXO_RELEASE_METHOD,
     EXO_CURRENT_POSITION_METHOD,
+    EXO_SHOULD_SKIP_TO_NEXT_ITEM_METHOD,
+    EXO_PLAYER_ERROR_METHOD,
+    EXO_PLAYER_FIELD,
+    EXO_EVENT_HANDLER_FIELD,
     DEBUG_FORMAT_HOLDER_FORMAT_FIELD,
     DEBUG_FORMAT_CODECS_FIELD,
     DEBUG_FORMAT_SAMPLE_MIME_TYPE_FIELD,
@@ -2001,6 +2005,11 @@ internal object AppleMusicHookProfiles {
             AppleMusicRuntimeMember.EXO_STOP_METHOD to "stop",
             AppleMusicRuntimeMember.EXO_RELEASE_METHOD to "release",
             AppleMusicRuntimeMember.EXO_CURRENT_POSITION_METHOD to "getCurrentPosition",
+            AppleMusicRuntimeMember.EXO_SHOULD_SKIP_TO_NEXT_ITEM_METHOD to
+                "shouldSkipToNextItem",
+            AppleMusicRuntimeMember.EXO_PLAYER_ERROR_METHOD to "onPlayerError",
+            AppleMusicRuntimeMember.EXO_PLAYER_FIELD to "player",
+            AppleMusicRuntimeMember.EXO_EVENT_HANDLER_FIELD to "eventHandler",
         ),
     )
 
