@@ -76,6 +76,10 @@ internal object AppleNetworkAutoSkipPolicy {
                 return false
             }
             if (TRANSIENT_EXCEPTIONS.any { it.isInstance(cause) }) return true
+            // InvalidResponseCodeException/responseCode 是 ExoPlayer2 公开 API
+            // （Apple Music 保留 com.google.android.exoplayer2 原始类名，未混淆），
+            // 因此不进入 Apple 版本档案；字段缺失或不可读时返回 false，
+            // 交回原生自动切歌决策。
             if (cause.javaClass.name.endsWith("InvalidResponseCodeException")) {
                 val responseCode = readIntField(cause, "responseCode") ?: return false
                 return responseCode in TRANSIENT_RESPONSE_CODES

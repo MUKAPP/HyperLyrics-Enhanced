@@ -378,7 +378,7 @@ internal class ApplePlaybackHooks(
         }
         val retryMethod = AppleReflection.findMethod(
             playerField.type,
-            EXO_PLAYER_RETRY_METHOD,
+            member(AppleMusicRuntimeMember.EXO_PLAYER_RETRY_METHOD),
             parameterCount = 0,
         )
         check(
@@ -980,7 +980,6 @@ internal class ApplePlaybackHooks(
 
     private companion object {
         private const val PLAYBACK_ANCHOR_INTERVAL_MS = 5_000L
-        private const val EXO_PLAYER_RETRY_METHOD = "retry"
         private val NETWORK_RETRY_DELAYS_MS = longArrayOf(1_000L, 2_000L, 4_000L, 8_000L)
     }
 }
